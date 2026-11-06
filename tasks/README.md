@@ -1,6 +1,6 @@
 # How to run a task (for Gábor)
 
-Each task file says which **model** and **reasoning level** to use. Default executor: **Claude Sonnet 5.5 in Claude Code** (prepaid in your Team plan): `/model`, pick Sonnet, set effort with the arrow keys. This repo's `.claude/settings.json` makes **high** the default effort for every session here. DeepSeek V4.1 Flash 1017 in Hermes also works.
+Each task file says which **model** and **reasoning level** to use. Default executor: **Claude Sonnet 5.5 in Claude Code** (prepaid in your Team plan): `/model`, pick Sonnet, set effort with the arrow keys. Set the effort in the app's model picker before each task: the repo has no `.claude/settings.json`, so nothing sets it for you. DeepSeek V4.1 Flash 1017 in Hermes also works.
 
 ## Run one task
 
@@ -42,3 +42,4 @@ DeepSeek peak hours: Mon–Fri 01:00–04:00 and 06:00–10:00 UTC, i.e. **02:00
 | 05 | Pick each item's text and split it into passages | low | no |
 | 06 | The search index and `hermes zotero sync` | **high** | yes (full sync, ~3.5 GB index; run after 06b) |
 | 06b | One unreadable file must not block the sync | low | no |
+| 07 | `zotero_search` (coverage, DOI check) and `zotero_read` | medium | yes (queries on the real index; `hermes gateway restart` first) |

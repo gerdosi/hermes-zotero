@@ -8,6 +8,8 @@ homepage: "https://github.com/<owner>/hermes-zotero"
 requires_hermes: ">=0.23.0"
 provides_tools:
   - zotero_status
+  - zotero_search
+  - zotero_read
 config_schema:
   zotero_data_dir: {type: str, default: "", description: "Zotero data directory. Empty = find it from Zotero's prefs.js, then ~/Zotero."}
   markdown_path: {type: str, default: "", description: "Optional folder of your own converted Markdown papers; preferred over Zotero's text cache."}
