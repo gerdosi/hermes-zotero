@@ -10,10 +10,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Iterable, Sequence
 
-from .textsource import choose_text, split_passages, text_signature
+from .textsource import TextResult, choose_text, split_passages, text_signature
 from .zdb import list_items, libraries as zotero_libraries, load_items, open_snapshot
 
 CHUNK = 500
+MAX_ITEM_WARNINGS = 20
 
 SCHEMA = (
     """CREATE TABLE IF NOT EXISTS items (library TEXT NOT NULL, item_key TEXT NOT NULL, item_id INTEGER, item_type TEXT, title TEXT,
@@ -173,7 +174,7 @@ def sync(index: Index, snapshot_path, data_dir, *, libraries: Sequence[str] = ("
                 for key in gone:
                     del have[name][key]
 
-        examined = indexed = 0
+        examined = indexed = read_errors = 0
         for start in range(0, total, batch_items):
             batch = refs[start:start + batch_items]
             items = load_items(con, [r.item_id for r in batch])
@@ -182,7 +183,15 @@ def sync(index: Index, snapshot_path, data_dir, *, libraries: Sequence[str] = ("
                     signature = text_signature(item, data_dir, corpus)
                     if have[item.library].get(item.key) == (item.modified, signature):
                         continue
-                    text = choose_text(item, data_dir, corpus)
+                    try:
+                        text = choose_text(item, data_dir, corpus)
+                    except OSError as e:
+                        read_errors += 1
+                        if read_errors <= MAX_ITEM_WARNINGS:
+                            warnings.append(f"item {item.key}: could not read text ({e}); "
+                                            "indexed title and abstract only")
+                        text = TextResult("metadata", "\n\n".join(p for p in (item.title, item.abstract) if p),
+                                          None, ("body_not_read", "read_error"), signature)
                     index.upsert(item, text, split_passages(text.text, text.source))
                     indexed += 1
             examined += len(batch)
@@ -194,6 +203,9 @@ def sync(index: Index, snapshot_path, data_dir, *, libraries: Sequence[str] = ("
                     return SyncReport(examined, indexed, deleted, total - examined, False, now - t0,
                                       tuple(warnings))
 
+        if read_errors > 1:
+            more = "; only the first 20 are listed" if read_errors > MAX_ITEM_WARNINGS else ""
+            warnings.append(f"{read_errors} items could not be read{more}")
         index.set_state("last_sync", datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))
         return SyncReport(examined, indexed, deleted, 0, True, clock() - t0, tuple(warnings))
     finally:
