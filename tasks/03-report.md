@@ -22,3 +22,11 @@ c440f8457b65e3b7fff84a982ac410b6c9ab3051493e7233d4866db597912b77  tests/test_03_
 - `cli snapshot` also returns 1 with a message if `data_root` is None or `data_root()` raises (unspecified case).
 ## Open questions
 - none
+
+## Live check
+- Sizes before: zotero.sqlite 163M, zotero.sqlite-wal 224K (shm 32K).
+- First snapshot: attempts 1, 1.316 s total; snapshot file 170852352 bytes; `select count(*) from items` = 42734.
+- Added one review paper in Zotero (sync had finished), then second snapshot: attempts 1; items = 42737 (+3: the item plus attachment/note records).
+- WAL after the add: 5.0M.
+- `hermes zotero doctor`: snapshot taken_at 2026-11-06T10:55:59Z, stale: False.
+- Zotero error during the snapshot: none reported by the user.
