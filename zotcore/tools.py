@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 from . import __version__
+from .datadir import resolve_data_dir
 from .jsonout import ok, safe
 from .settings import Settings
 
@@ -29,7 +30,8 @@ def tool_specs(settings_provider: Callable[[], Settings]) -> list[ToolSpec]:
     def status(args: dict, **kwargs) -> str:
         s = settings_provider()
         return ok(plugin_version=__version__, stage="scaffold",
-                  settings=s.as_dict(), warnings=list(s.warnings))
+                  settings=s.as_dict(), warnings=list(s.warnings),
+                  data_dir=resolve_data_dir(s.zotero_data_dir).as_dict())
 
     return [
         ToolSpec(
