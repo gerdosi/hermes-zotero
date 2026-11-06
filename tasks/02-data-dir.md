@@ -2,8 +2,8 @@
 
 | | |
 | --- | --- |
-| Executor | DeepSeek V4.1 Flash 1017 |
-| Reasoning | **low** (`/reasoning low`). If the `profiles.ini` or escaping tests fail twice, rerun at **medium**. |
+| Executor | Claude Sonnet 5.5 in Claude Code (or DeepSeek V4.1 Flash 1017 in Hermes) |
+| Reasoning | **low**. If the `profiles.ini` or escaping tests fail twice, rerun at **medium**. |
 | Budget | ≤ 40 tool calls |
 | Depends on | task 01 committed, all its tests green |
 | Done when | `python -m pytest` shows **37 passed** (23 old + 14 new), checksums match, report committed |
