@@ -7,6 +7,7 @@ from typing import Callable
 
 from . import __version__
 from .datadir import resolve_data_dir
+from .index import Index
 from .jsonout import ok, safe
 from .settings import Settings
 from .snapshot import is_stale, load_info
@@ -35,19 +36,28 @@ def tool_specs(settings_provider: Callable[[], Settings],
         warnings = list(s.warnings)
         found = resolve_data_dir(s.zotero_data_dir)
         snapshot = None
+        index = None
         if data_root is not None:
             try:
-                root = Path(data_root()) / "snapshot"
+                plugin_root = Path(data_root())
+                root = plugin_root / "snapshot"
             except Exception:
                 warnings.append("plugin data dir unavailable; snapshot status not shown")
             else:
+                index_path = plugin_root / "index.sqlite"
+                if index_path.exists():  # status must never create the index
+                    idx = Index(index_path)
+                    try:
+                        index = idx.counts()
+                    finally:
+                        idx.close()
                 info = load_info(root)
                 if info is not None:
                     snapshot = {"taken_at": info.taken_at,
                                 "stale": is_stale(info, found.path) if found.path else None}
         return ok(plugin_version=__version__, stage="scaffold",
                   settings=s.as_dict(), warnings=warnings,
-                  data_dir=found.as_dict(), snapshot=snapshot)
+                  data_dir=found.as_dict(), snapshot=snapshot, index=index)
 
     return [
         ToolSpec(

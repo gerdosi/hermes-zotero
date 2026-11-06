@@ -6,8 +6,10 @@ from pathlib import Path
 
 from . import __version__
 from .datadir import resolve_data_dir
+from .index import Index, sync
 from .settings import Settings
 from .snapshot import SnapshotError, is_stale, load_info, take_snapshot
+from .textsource import MarkdownCorpus
 
 
 def setup_parser(parser: argparse.ArgumentParser) -> None:
@@ -15,6 +17,7 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
     sub = parser.add_subparsers(dest="zotero_cmd")
     sub.add_parser("doctor", help="Check settings and Zotero access")
     sub.add_parser("snapshot", help="Copy zotero.sqlite (+WAL) into the plugin data dir")
+    sub.add_parser("sync", help="Snapshot Zotero and update the search index")
     parser.set_defaults(_zparser=parser)
 
 
@@ -32,6 +35,47 @@ def _print_snapshot_block(result, data_root) -> None:
         return
     print(f"  taken_at: {info.taken_at}")
     print(f"  stale: {is_stale(info, result.path) if result.path else None}")
+
+
+def _run_sync(settings: Settings, data_root) -> int:
+    """`hermes zotero sync`: take a snapshot, then update the index from it."""
+    result = resolve_data_dir(settings.zotero_data_dir)
+    if not result.path:
+        print("Zotero data directory not found; run `hermes zotero doctor` for details.")
+        return 2
+    if data_root is None:
+        print("sync failed: plugin data dir unavailable")
+        return 1
+    root = Path(data_root())
+    try:
+        info = take_snapshot(result.path, root / "snapshot")
+    except SnapshotError as e:
+        print(f"snapshot failed ({e.code}): {e.message}")
+        return 1
+    print(f"Snapshot: {info.path} (attempts {info.attempts})")
+    corpus = MarkdownCorpus(settings.markdown_path) if settings.markdown_path else None
+    marks = {"next": 10}
+
+    def progress(done: int, total: int) -> None:
+        pct = 100 * done // total if total else 100
+        if pct >= marks["next"] or done == total:
+            print(f"  {done}/{total} items examined")
+            marks["next"] = (pct // 10 + 1) * 10
+
+    index = Index(root / "index.sqlite")
+    try:
+        report = sync(index, info.path, result.path, libraries=settings.libraries, corpus=corpus,
+                      batch_items=settings.sync_batch_items, progress=progress)
+        for warning in report.warnings:
+            print(f"  warning: {warning}")
+        print(f"Sync: indexed {report.indexed}, deleted {report.deleted}, "
+              f"examined {report.examined} in {report.seconds:.1f}s")
+        c = index.counts()
+        print(f"Index: {c['items']} items, {c['passages']} passages; "
+              f"text sources {c['by_source']}; flags {c['flags']}")
+    finally:
+        index.close()
+    return 0
 
 
 def run(args: argparse.Namespace, settings: Settings, data_root=None) -> int:
@@ -75,6 +119,8 @@ def run(args: argparse.Namespace, settings: Settings, data_root=None) -> int:
             return 1
         print(f"Snapshot written: {info.path} (attempts {info.attempts})")
         return 0
+    if cmd == "sync":
+        return _run_sync(settings, data_root)
     parser = getattr(args, "_zparser", None)
     if parser is not None:
         parser.print_help()
