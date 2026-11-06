@@ -40,3 +40,26 @@ Step 1 (direct, real index: libraries user + 4805701). All values match the expe
 | read N4AKAC5N, offset 10,000,000 | next_offset 10004000, total_chars 20125419 | 0.01 s |
 
 Step 2 (through Hermes: `hermes gateway restart`, then the ferroptosis prompt): not run here; it needs the gateway restart and a Hermes session.
+
+### Step 2: through Hermes (6 Nov 2026, 14:31 CET)
+Ran `hermes gateway restart` (service restart requested), then `hermes -z "Use zotero_search to check whether my library covers ferroptosis in adipocytes, then read the best passage with zotero_read."`. Model: grok-4.7 (xai-oauth), 5 API calls, 40.3 s.
+
+Tool calls (arguments come from Hermes's `state.db` message store; the logs only show names, time and size). Hermes calls plugin tools through its `tool_describe` / `tool_call` wrapper:
+1. `tool_describe` names `["zotero_search", "zotero_read"]`
+2. `zotero_search` `{"query": "ferroptosis adipocytes", "limit": 10}`
+3. `zotero_read` `{"key": "CTHXXL3Z", "max_chars": 4000, "query": "ferroptosis adipocytes"}`
+4. `zotero_read` `{"key": "CTHXXL3Z", "max_chars": 1800, "offset": 44930}` (paging) and `zotero_read` `{"key": "Q3Y95CGB", "max_chars": 1600, "query": "adipocyte ACSL4"}`
+
+Gateway/agent log lines (`~/.hermes/logs/agent.log`; `gateway.log` only has the inbound and response lines):
+```
+14:31:02,881 INFO gateway.run: inbound message: platform=local ... msg='Use zotero_search to check whether my library covers ferroptosis in adipocytes, '
+14:31:12,892 INFO ... agent.tool_executor: tool zotero_search completed (0.03s, 7403 chars)
+14:31:21,548 INFO ... agent.tool_executor: tool zotero_read completed (0.22s, 4483 chars)
+14:31:28,952 INFO ... agent.tool_executor: tool zotero_read completed (0.01s, 2268 chars)
+14:31:28,975 INFO ... agent.tool_executor: tool zotero_read completed (0.02s, 2133 chars)
+14:31:43,156 INFO gateway.run: response ready: ... time=40.3s api_calls=5 response=1972 chars
+```
+
+Coverage verdict: **strong**. Hermes reported "Twenty-seven papers match both terms, 17 of them from the last five years, newest in 2026". The same search run directly gives matches_all 27, recent 17, newest_year 2026, strong, so the numbers agree.
+
+Answer excerpt: "The library covers ferroptosis in adipocytes strongly. ... The best passage is Yang et al., Genes, 2023, section 3.4, 'Notch Signaling Regulates Ferroptosis Pathways in PVAT-SVF Differentiated Adipocytes.'" It added a thinner second hit (Liang et al., Molecular Cell, 2022, on ACSL4).
