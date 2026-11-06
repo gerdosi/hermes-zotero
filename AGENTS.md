@@ -12,6 +12,7 @@ Hermes loads this file automatically. It applies to every task in `tasks/`.
 plugin.yaml          Hermes manifest
 pyproject.toml       version, pytest config (no dependencies)
 __init__.py          Hermes glue ONLY: register(ctx). The only file that may import Hermes modules, and only inside functions.
+                     Everything in it stays under `if __package__:` (pytest >= 8 imports it bare while collecting tests).
 zotcore/             all logic; pure standard-library Python >= 3.11; no Hermes imports
 tests/               pytest; test_NN_*.py are acceptance tests from tasks/NN-*.md
 tasks/               task files (instructions) and NN-report.md (your reports)
@@ -25,7 +26,7 @@ tasks/               task files (instructions) and NN-report.md (your reports)
 4. **Acceptance tests are read-only.** Copy `tests/test_NN_*.py` (and, in task 01, `tests/conftest.py`) from the task file byte-for-byte, then check the SHA-256 listed in the task. Never edit, delete, skip, `xfail` or weaken them, and add no pytest hooks or plugins that change their behaviour. `tests/conftest.py` may only gain new fixtures. If you think a test is wrong, stop and explain why in the report.
 5. **Touch only the files listed** under "Files" in the task.
 6. **No network access** in code or tests.
-7. Before finishing, run `python -m pytest`. **All** tests, old and new, must pass.
+7. Before finishing, run `python -m pytest` (use `.venv/bin/python -m pytest` if the repo has a `.venv`) on the **current** pytest; never pin pytest to an old version to make tests pass. **All** tests, old and new, must pass.
 8. **Stop rule:** if the same failure survives two fix attempts, stop and write the report with status `BLOCKED`. Include the failing output and your best hypothesis.
 9. **Finish** by writing `tasks/NN-report.md` (template below) and making one commit: `task NN: <title>`.
 

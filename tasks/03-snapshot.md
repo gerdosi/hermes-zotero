@@ -2,8 +2,8 @@
 
 | | |
 | --- | --- |
-| Executor | DeepSeek V4.1 Flash 1017 |
-| Reasoning | **max** (`/reasoning max`). This is concurrency-sensitive file handling; detailed specs do not remove debugging work. |
+| Executor | Claude Sonnet 5.5 in Claude Code (or DeepSeek V4.1 Flash 1017 in Hermes) |
+| Reasoning | Sonnet: **high** (rerun at **max** if BLOCKED). DeepSeek: **max**. This is concurrency-sensitive file handling; detailed specs do not remove debugging work. |
 | Budget | ≤ 60 tool calls |
 | Depends on | tasks 01–02 committed, all tests green |
 | Done when | `python -m pytest` shows **51 passed** (37 old + 14 new), checksums match, report committed |
@@ -81,29 +81,32 @@ def is_stale(info: SnapshotInfo, data_dir) -> bool
 
 ```python
 """Hermes glue for hermes-zotero. All logic lives in zotcore/."""
-from .zotcore import __version__, cli, tools
-from .zotcore.settings import Settings
+# pytest >= 8 imports this file "bare" (without a parent package) while collecting tests,
+# where relative imports fail. Hermes always loads it as a package, so everything sits
+# under this guard.
+if __package__:
+    from .zotcore import __version__, cli, tools
+    from .zotcore.settings import Settings
 
+    def register(ctx):
+        def settings() -> Settings:
+            return Settings.from_getter(ctx.get_config)
 
-def register(ctx):
-    def settings() -> Settings:
-        return Settings.from_getter(ctx.get_config)
+        def data_root():
+            from plugins.plugin_storage import plugin_data_dir  # Hermes public API; per-profile folder
+            return plugin_data_dir("hermes-zotero")
 
-    def data_root():
-        from plugins.plugin_storage import plugin_data_dir  # Hermes public API; per-profile folder
-        return plugin_data_dir("hermes-zotero")
+        for spec in tools.tool_specs(settings, data_root=data_root):
+            ctx.register_tool(name=spec.name, toolset="zotero", schema=spec.schema,
+                              handler=spec.handler, description=spec.description, emoji="📚")
 
-    for spec in tools.tool_specs(settings, data_root=data_root):
-        ctx.register_tool(name=spec.name, toolset="zotero", schema=spec.schema,
-                          handler=spec.handler, description=spec.description, emoji="📚")
-
-    ctx.register_cli_command(
-        name="zotero",
-        help="Local, read-only Zotero library index",
-        setup_fn=cli.setup_parser,
-        handler_fn=lambda args: cli.run(args, settings(), data_root=data_root),
-        description="Check and maintain the local Zotero index used by the zotero_* tools.",
-    )
+        ctx.register_cli_command(
+            name="zotero",
+            help="Local, read-only Zotero library index",
+            setup_fn=cli.setup_parser,
+            handler_fn=lambda args: cli.run(args, settings(), data_root=data_root),
+            description="Check and maintain the local Zotero index used by the zotero_* tools.",
+        )
 ```
 
 `zotcore/tools.py`:

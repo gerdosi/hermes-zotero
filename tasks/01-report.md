@@ -22,6 +22,6 @@ f073b1a55bcd9c7828b5911686c522241ad5cdb116e1982d7d372c9e8a2349f0  tests/test_01_
 ```
 All five match the table in the task.
 ## Deviations from the task
-- Dev venv (.venv, Python 3.11.16) uses pytest<8 (7.x). With pytest 9.2.0 every test errored at setup: pytest 8+ treats the repo root as a Package (it has __init__.py) and imports it with no parent package, so the relative imports in __init__.py fail. pytest 7 does not do this. Neither pyproject.toml nor tests may be changed, so I pinned the dev tool instead. Anyone running pytest 8+ will hit this and should use pytest<8.
+- Resolved in task 01b: root __init__.py now guarded with "if __package__:"; 23 passed on pytest 9.2.0.
 ## Open questions
 - none

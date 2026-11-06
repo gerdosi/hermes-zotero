@@ -1,6 +1,6 @@
 # How to run a task (for Gábor)
 
-Each task file says which **model** and **reasoning level** to use. They are written for DeepSeek V4.1 Flash 1017.
+Each task file says which **model** and **reasoning level** to use. Default executor: **Claude Sonnet 5.5 in Claude Code** (prepaid in your Team plan): `/model`, pick Sonnet, set effort with the arrow keys. DeepSeek V4.1 Flash 1017 in Hermes also works.
 
 ## Run one task
 
@@ -34,5 +34,6 @@ DeepSeek peak hours: Mon–Fri 01:00–04:00 and 06:00–10:00 UTC, i.e. **02:00
 | Task | Title | Reasoning | Needs Zotero for live check |
 | --- | --- | --- | --- |
 | 01 | Scaffold: manifest, settings, status tool, CLI | low | no (Hermes only) |
+| 01b | Make the tests run on current pytest | low | no |
 | 02 | Find the Zotero data directory | low | yes |
-| 03 | Consistent snapshot of zotero.sqlite + WAL | **max** | yes |
+| 03 | Consistent snapshot of zotero.sqlite + WAL | Sonnet **high** / DeepSeek **max** | yes |
