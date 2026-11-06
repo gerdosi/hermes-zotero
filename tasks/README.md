@@ -1,0 +1,38 @@
+# How to run a task (for Gábor)
+
+Each task file says which **model** and **reasoning level** to use. They are written for DeepSeek V4.1 Flash 1017.
+
+## Run one task
+
+```bash
+cd ~/Developer/hermes-zotero        # the repo; AGENTS.md is picked up automatically
+hermes
+```
+
+Then, inside the session:
+
+```
+/model <DeepSeek V4.1 Flash 1017 id as listed by `hermes model`>
+/reasoning low        # or: /reasoning max, as the task header says
+Execute tasks/01-scaffold.md exactly as written. Follow AGENTS.md. Stop when the task's acceptance tests pass and the report is committed.
+```
+
+Use a **fresh session per task**: it keeps the context small and cheap.
+
+## Off-peak (half price)
+
+DeepSeek peak hours: Mon–Fri 01:00–04:00 and 06:00–10:00 UTC, i.e. **02:00–05:00 and 07:00–11:00 CET** (CEST from late March shifts this one hour later). Evenings, afternoons after 11:00 and weekends are off-peak.
+
+## After each task
+
+1. Read `tasks/NN-report.md`. If `BLOCKED`, rerun once at the next reasoning level up (low → medium → high → max). If it is still blocked, bring it to review.
+2. Do the task's **Live check** on your Mac (it needs Zotero), and add the results to the report under `## Live check`.
+3. `git push`, then start a fresh Claude session: "Review task NN in <repo URL>. Plan doc: <doc link>."
+
+## Task list
+
+| Task | Title | Reasoning | Needs Zotero for live check |
+| --- | --- | --- | --- |
+| 01 | Scaffold: manifest, settings, status tool, CLI | low | no (Hermes only) |
+| 02 | Find the Zotero data directory | low | yes |
+| 03 | Consistent snapshot of zotero.sqlite + WAL | **max** | yes |
