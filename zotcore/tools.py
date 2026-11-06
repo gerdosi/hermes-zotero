@@ -17,23 +17,24 @@ from .settings import Settings
 from .snapshot import is_stale, load_info
 from .synctool import sync_step
 
-STATUS_DESC = ("Zotero library index status: whether the local Zotero index is ready, "
-               "how fresh it is, and what it holds.")
-
-SEARCH_DESC = ("Zotero library search: find papers the user already has, by full text, offline. "
-               "Returns ranked papers with short passages and a coverage verdict (strong / thin / none) "
-               "for the topic; doi= checks whether one specific paper is held. Search here before the web.")
-READ_DESC = ("Zotero paper reader: read a bounded passage of one paper from the user's library, by item key, "
-             "at the best match for a query or at a character offset, with a citation line. "
-             "mode=annotations returns the user's own highlights, comments and notes on the paper instead. "
-             "Use keys from zotero_search.")
-SYNC_DESC = ("Zotero index update: add new and changed papers from the user's Zotero library to the local index. "
-             "Each call runs for at most budget_seconds and the next call resumes; it returns progress and "
-             "how many items remain. Use it when the user has added papers or zotero_status shows a stale snapshot.")
+STATUS_DESC = ("Zotero index status: whether the local library index is ready and up to date. "
+               "Returns what the index holds, the snapshot age and a hint for what to do next.")
+SEARCH_DESC = ("Zotero library search: find papers the user already owns, before using the web. "
+               "Full text, offline, ranked by passage. Returns short snippets and a coverage verdict "
+               "(strong / thin / none) for the topic. Filters: collection, tag, year, library; "
+               "doi= checks whether one paper is held.")
+READ_DESC = ("Zotero paper reader: read part of one paper, or the user's highlights on it. "
+             "Give a key from zotero_search and a query (starts at the best match) or an offset "
+             "(next_offset pages on); every result carries a citation line. "
+             "mode=annotations returns the user's own highlights, comments and notes instead of the text.")
+SYNC_DESC = ("Zotero index update: add new and changed papers from Zotero to the local index. "
+             "Each call stops after budget_seconds and the next call resumes; it reports progress and "
+             "how many items remain. Use it when the user has added papers or zotero_status says Zotero changed.")
 SEARCH_SCHEMA = {"type": "object", "properties": {
     "query": {"type": "string", "description": "Keywords, e.g. 'SCD1 ferroptosis'. Every word counts."},
     "doi": {"type": "string", "description": "Check whether this DOI is in the library."},
     "collection": {"type": "string", "description": "Only this Zotero collection (and its subcollections)."},
+    "tag": {"type": "string", "description": "Only papers with this Zotero tag (any letter case)."},
     "library": {"type": "string", "description": "'user' or a group ID. Default: all indexed libraries."},
     "year_from": {"type": "integer"},
     "year_to": {"type": "integer"},
@@ -72,6 +73,17 @@ def _str_arg(args: dict, name: str):
     if isinstance(v, bool) or not isinstance(v, (str, int)):
         raise SearchError("invalid_argument", f"{name} must be a string")
     return str(v).strip() or None
+
+
+def _status_hint(ready: bool, data_dir, snapshot) -> str | None:
+    """What the agent should do next, as one sentence, or None."""
+    if not ready and data_dir is None:
+        return "Zotero's data directory was not found: ask the user to run `hermes zotero doctor` in a terminal."
+    if not ready:
+        return "The index is empty: ask the user to run `hermes zotero sync` in a terminal once."
+    if snapshot is not None and snapshot["stale"]:
+        return "Zotero has changed since the last sync: call zotero_sync to add the changes."
+    return None
 
 
 @dataclass(frozen=True)
@@ -117,7 +129,8 @@ def tool_specs(settings_provider: Callable[[], Settings],
                 if info is not None:
                     snapshot = {"taken_at": info.taken_at,
                                 "stale": is_stale(info, found.path) if found.path else None}
-        return ok(plugin_version=__version__, stage="scaffold",
+        ready = bool(index and index["items"] > 0)
+        return ok(plugin_version=__version__, ready=ready, hint=_status_hint(ready, found.path, snapshot),
                   settings=s.as_dict(), warnings=warnings,
                   data_dir=found.as_dict(), snapshot=snapshot, index=index)
 
@@ -142,6 +155,7 @@ def tool_specs(settings_provider: Callable[[], Settings],
             limit = min(max(_int_arg(args, "limit", 10), 1), 25)
             payload = search(con, s, query=_str_arg(args, "query"), doi=_str_arg(args, "doi"),
                              library=_str_arg(args, "library"), collection=_str_arg(args, "collection"),
+                             tag=_str_arg(args, "tag"),
                              year_from=_int_arg(args, "year_from"), year_to=_int_arg(args, "year_to"), limit=limit)
             out = ok(**payload)
             dropped = 0

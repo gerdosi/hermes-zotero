@@ -72,9 +72,9 @@ def _collection_match(paths: list[str], wanted: str) -> bool:
     return False
 
 
-def _build_scope(con, library, collection, year_from, year_to) -> bool:
+def _build_scope(con, library, collection, year_from, year_to, tag=None) -> bool:
     """Fill temp.scope from the filters; return True when the scope is empty."""
-    sql = "SELECT library, item_key, collections FROM items WHERE 1=1"
+    sql = "SELECT library, item_key, collections, tags FROM items WHERE 1=1"
     params: list = []
     if library is not None:
         sql += " AND library = ?"
@@ -87,9 +87,12 @@ def _build_scope(con, library, collection, year_from, year_to) -> bool:
         params.append(year_to)
     con.execute("CREATE TEMP TABLE IF NOT EXISTS scope (library TEXT, item_key TEXT, PRIMARY KEY (library, item_key))")
     con.execute("DELETE FROM temp.scope")
+    wanted_tag = None if tag is None else tag.casefold()
     rows = []
-    for lib, key, cols in con.execute(sql, params).fetchall():
+    for lib, key, cols, tags in con.execute(sql, params).fetchall():
         if collection is not None and not _collection_match(json.loads(cols or "[]"), collection):
+            continue
+        if wanted_tag is not None and wanted_tag not in (t.casefold() for t in json.loads(tags or "[]")):
             continue
         rows.append((lib, key))
     con.executemany("INSERT INTO temp.scope VALUES (?, ?)", rows)
@@ -285,7 +288,7 @@ def _doi_check(con, doi, terms) -> dict:
 
 
 def search(con, settings, *, query=None, doi=None, library=None, collection=None, year_from=None,
-           year_to=None, limit=10, this_year=None) -> dict:
+           year_to=None, limit=10, this_year=None, tag=None) -> dict:
     """Search the index; see the task spec for the result layout."""
     terms, truncated = query_terms(query)
     if not terms and not doi:
@@ -296,8 +299,8 @@ def search(con, settings, *, query=None, doi=None, library=None, collection=None
     result: dict = {"query": query, "terms": terms}
     if doi:
         result["doi_check"] = _doi_check(con, doi, terms)
-    scoped = any(v is not None for v in (library, collection, year_from, year_to))
-    if scoped and _build_scope(con, library, collection, year_from, year_to):
+    scoped = any(v is not None for v in (library, collection, year_from, year_to, tag))
+    if scoped and _build_scope(con, library, collection, year_from, year_to, tag):
         warnings.append("no indexed items match the filters")
     if terms:
         result["hits"] = _find_hits(con, terms, scoped, limit)

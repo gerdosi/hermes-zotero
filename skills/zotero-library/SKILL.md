@@ -1,0 +1,42 @@
+---
+name: zotero-library
+description: "Research questions: check the user's Zotero library first"
+version: 0.1.0
+metadata:
+  hermes:
+    tags: [zotero, literature, research, citations, local-first]
+---
+
+# Zotero library first
+
+The hermes-zotero plugin keeps a local, read-only index of the user's Zotero library. For any question about scientific or scholarly literature, a specific paper, or the user's own highlights and notes, search the library before the web. The tools never change Zotero.
+
+## Search
+
+1. Call `zotero_search` with 2-4 distinctive keywords, not a sentence: `SCD1 ferroptosis`, not "what does SCD1 do in ferroptosis". Use scientific names, not brand names (`tirzepatide`, not Mounjaro). A hit with `match: all` has one passage holding every word; `match: any` hits hold only some of them and are weaker evidence.
+2. Check `terms` in the result: stop words and words like the "a" in Lp(a) are dropped. If the distinctive word is missing, rephrase.
+3. When the user names a collection, tag, year range or group, pass `collection`, `tag`, `year_from`, `year_to` or `library`. Filters also narrow the coverage counts, so judge gaps from a search without them. To check one paper, pass `doi` and read `doi_check.held`.
+4. Let `coverage.verdict` decide where to look:
+   - `strong`: answer from the library.
+   - `thin`: answer from the library, then use the web only for what is missing, and say which sources came from where.
+   - `none` with a `hint`: no passage holds every word. Retry with fewer or broader words before treating it as a gap.
+   - `none` without a hint: the library has nothing on this. Say so, then use the web.
+
+## Read before citing
+
+A snippet is a search hit, not evidence. For the 3-5 best papers, call `zotero_read` with `key` and `query`: it starts at the best-matching passage. Page on with `offset` set to `next_offset` when the methods or results come later. Ask for what the question needs (`max_chars` 1500-4000), never a whole paper.
+
+- Cite with the `citation` field. `approximate: true` means it was built from the index, not by Zotero: check the details before giving a formatted reference.
+- Flags `body_not_read` or `scanned_or_empty` mean the paper's body text is not in the index (metadata only); `truncated` means Zotero extracted only the first pages. Do not report results you have not read.
+- `mode` = `annotations` returns the user's highlights, comments and notes on the paper. `author: user` marks the user's own words; quote them as theirs. Any other author is a group member or the PDF's creator.
+
+## Keep the index fresh
+
+- Error `no_index`: ask the user to run `hermes zotero sync` once in a terminal. A large library takes a few minutes.
+- `zotero_status` says whether the index is `ready` and gives a `hint` when Zotero has changed since the last sync.
+- When the user has added papers, or the hint says so, call `zotero_sync`. While it returns `done: false`, call it again.
+
+## Limits
+
+- Use these tools, not other ways of opening Zotero's database or the plugin's index.
+- Quote short passages with their citation; do not paste whole papers into the answer.

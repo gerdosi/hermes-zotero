@@ -13,6 +13,7 @@ plugin.yaml          Hermes manifest
 pyproject.toml       version, pytest config (no dependencies)
 __init__.py          Hermes glue ONLY: register(ctx). The only file that may import Hermes modules, and only inside functions.
                      Everything in it stays under `if __package__:` (pytest >= 8 imports it bare while collecting tests).
+skills/              the bundled Hermes skill (SKILL.md is reviewer-written: copy it byte-for-byte from the task)
 zotcore/             all logic; pure standard-library Python >= 3.11; no Hermes imports
 tests/               pytest; test_NN_*.py are acceptance tests from tasks/NN-*.md
 tasks/               task files (instructions) and NN-report.md (your reports)
@@ -23,7 +24,7 @@ tasks/               task files (instructions) and NN-report.md (your reports)
 1. **Never modify the Zotero data directory.** Do not open `zotero.sqlite` there with sqlite3, do not create files there, do not lock it. Reading file bytes (copying) is the only allowed access.
 2. **`zotcore/` stays standard-library only** and never imports Hermes (`plugins.*`, `hermes_cli.*`, `tools.*`). Hermes things are passed in from `__init__.py` as callables.
 3. **Tool handlers** have the signature `handler(args: dict | None, **kwargs) -> str`, return a JSON string, and never raise. Wrap them with `zotcore.jsonout.safe`.
-4. **Acceptance tests are read-only.** Copy `tests/test_NN_*.py` (and `tests/conftest.py` in task 01, `tests/zfixture.py` in task 04) from the task file byte-for-byte, then check the SHA-256 listed in the task. Never edit, delete, skip, `xfail` or weaken them, and add no pytest hooks or plugins that change their behaviour. `tests/conftest.py` may only gain new fixtures. If you think a test is wrong, stop and explain why in the report.
+4. **Acceptance tests are read-only.** Copy `tests/test_NN_*.py` (and `tests/conftest.py` in task 01, `tests/zfixture.py` in task 04, `skills/zotero-library/SKILL.md` in task 09) from the task file byte-for-byte, then check the SHA-256 listed in the task. Never edit, delete, skip, `xfail` or weaken them, and add no pytest hooks or plugins that change their behaviour. `tests/conftest.py` may only gain new fixtures. If you think a test is wrong, stop and explain why in the report.
 5. **Touch only the files listed** under "Files" in the task.
 6. **No network access** in code or tests, with one exception: `zotcore/citation.py` may call Zotero's local API on `127.0.0.1`, and tests may start servers on `127.0.0.1`.
 7. Before finishing, run `python -m pytest` (use `.venv/bin/python -m pytest` if the repo has a `.venv`) on the **current** pytest; never pin pytest to an old version to make tests pass. **All** tests, old and new, must pass.
