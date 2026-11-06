@@ -62,7 +62,11 @@ hermes zotero sync 2>&1  1.46s user 0.66s system 62% cpu 3.375 total
 ```json
 {"items": 19290, "passages": 1067135, "libraries": {"4805701": 693, "user": 18597}, "by_source": {"ft-cache": 484, "markdown": 18336, "metadata": 470}, "flags": {"body_not_read": 470, "scanned_or_empty": 86}, "last_sync": "2026-11-06T12:32:26Z"}
 ```
-**Not verified through Hermes.** Asking Hermes to call `zotero_status` (`hermes -z ...`, twice) returned the old task-01 payload (`stage: scaffold`, with no `data_dir`, `snapshot` or `index` keys). `~/.hermes/logs/gateway.log` shows both prompts arrived as `gateway.run: inbound message: platform=local`, so `-z` goes through the already-running Hermes gateway (started 08:45, before tasks 02-06), which still has the old plugin code loaded. The gateway needs a restart to load the current plugin; it was not restarted because it is a live service (Telegram etc.). After a restart, re-run: `hermes -z "call zotero_status"` and check for `index`.
+**Through Hermes.** The first two attempts (`hermes -z ...`) returned the old task-01 payload (`stage: scaffold`, with no `data_dir`, `snapshot` or `index` keys). `~/.hermes/logs/gateway.log` showed the prompts arriving as `gateway.run: inbound message: platform=local`, so `-z` goes through the running gateway, which had loaded the plugin at 08:45, before tasks 02-06. After `hermes gateway restart` (launchd service, PID 3868 to 17812) the same prompt returned the current payload:
+```json
+{"ok": true, "plugin_version": "0.1.0", "stage": "scaffold", "settings": {"zotero_data_dir": "", "markdown_path": "~/Zotero-Markdown", "libraries": ["user", "4805701"], ...}, "warnings": [], "data_dir": {"path": "/Users/erdoke/Zotero", "source": "prefs:...", ...}, "snapshot": {"taken_at": "2026-11-06T12:32:24Z", "stale": false}, "index": {"items": 19290, "passages": 1067135, "libraries": {"4805701": 693, "user": 18597}, "by_source": {"ft-cache": 484, "markdown": 18336, "metadata": 470}, "flags": {"body_not_read": 470, "scanned_or_empty": 86}, "last_sync": "2026-11-06T12:32:26Z"}}
+```
+The `index` block is identical to the direct handler call. Note: after any plugin code change the gateway must be restarted (`hermes gateway restart`) before Hermes tools reflect it.
 
 ### 5. Size and warnings
 ```
