@@ -125,5 +125,33 @@ citation: {'text': 'Bell, H. N., Stockwell, B. R., & Zou, W. (2024). Ironing out
 
 **Side effect to be aware of:** following the `local-literature` skill, the agent ran `~/.hermes/skills/research/local-literature/scripts/incremental_sync.py` for real (after a `--dry-run`) with `notify`/`background`, which wrote to `~/Zotero-Markdown`: 14 new papers converted and added to `~/Zotero-Markdown/index.sqlite` (now 18,328 rows), 3 Cell papers repaired from Zotero's text cache and the ingest manifest edited. This came from the skill, not from this plugin, and the plugin's own code only wrote to its own index. The prompt in this check is what triggered it; the plugin index also picked up the same 14 papers (19,290 items, nothing remaining).
 
+### 4. Through Hermes after the skill update
+`hermes gateway restart` was run first (launchd-supervised, new gateway PID 21743), then `hermes -z "What did I highlight in the NEJM paper 'Managing Obesity'? Give the citation too."`. Session `local-ff8859a3…` (oneshot, model grok-4.7). Tool calls are from `~/.hermes/state.db`, `tool … completed` lines from `~/.hermes/logs/agent.log`. No files were changed for this check apart from this report.
+
+**This time the plugin path was taken.** Compared with prompt 1 in section 3, there was no `terminal`, `curl`, sqlite or PDF fallback: 5 tool calls, 4 model API calls.
+
+Tool calls in order (`state.db`):
+1. `tool_describe {"names":["zotero_search","zotero_read","zotero_status"]}`
+2. `skill_view {"name":"local-literature"}`
+3. `skill_view {"name":"research-answer-formatting"}`
+4. `tool_call {"calls":[{"name":"zotero_search","arguments":{"query":"Managing Obesity NEJM","limit":10}}]}`
+5. `tool_call {"calls":[{"name":"zotero_read","arguments":{"key":"Q3K5IWZH","mode":"annotations"}}]}`
+
+`tool … completed` lines (`agent.log`):
+```
+15:56:15,573 tool tool_describe completed (0.02s, 2247 chars)
+15:56:15,696 tool skill_view completed (0.15s, 22420 chars)
+15:56:15,704 tool skill_view completed (0.16s, 25190 chars)
+15:56:18,745 tool zotero_search completed (0.66s, 6783 chars)
+15:56:20,718 tool zotero_read completed (0.07s, 4537 chars)
+```
+The two `zotero_*` calls took 0.73 s together. The `zotero_read` call used `mode: "annotations"` directly on key `Q3K5IWZH`, the same item as in section 1.
+
+**Total time:** 65 s wall clock for `hermes -z` (exit 0), against 2 min 18 s for the same prompt in section 3. Nearly all of it is model time between tool calls.
+
+**Answer (excerpt):** it reported 19 highlights, grouped by colour with page numbers, e.g. "Red (p. 719): Managing Obesity / Treatment Options / 1. Initiate therapy with semaglutide. 2. Recommend metabolic and bariatric surgery." then purple (framing), orange for the case and for the semaglutide and surgery arguments (pp. 720–721). Citation given: Kotanidis, Christos P., A. Michael Lincoff, and Scott A. Shikora. 2025. "Managing Obesity." New England Journal of Medicine 393(7): 719–721. https://doi.org/10.1056/NEJMclde2413003 (matches section 1).
+
+Not checked here: whether each highlight's text and page in the answer matches the Zotero annotations one by one.
+
 ### Left as it is
 Zotero is open with the local API switched on (Gábor's choice; the plugin works either way).
