@@ -37,3 +37,4 @@ DeepSeek peak hours: Mon–Fri 01:00–04:00 and 06:00–10:00 UTC, i.e. **02:00
 | 01b | Make the tests run on current pytest | low | no |
 | 02 | Find the Zotero data directory | low | yes |
 | 03 | Consistent snapshot of zotero.sqlite + WAL | Sonnet **high** / DeepSeek **max** | yes |
+| 03b | Retry when Zotero restarts its WAL during the copy | low | no (live check of 03 after this) |
