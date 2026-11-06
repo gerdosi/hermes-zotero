@@ -25,7 +25,7 @@ tasks/               task files (instructions) and NN-report.md (your reports)
 3. **Tool handlers** have the signature `handler(args: dict | None, **kwargs) -> str`, return a JSON string, and never raise. Wrap them with `zotcore.jsonout.safe`.
 4. **Acceptance tests are read-only.** Copy `tests/test_NN_*.py` (and `tests/conftest.py` in task 01, `tests/zfixture.py` in task 04) from the task file byte-for-byte, then check the SHA-256 listed in the task. Never edit, delete, skip, `xfail` or weaken them, and add no pytest hooks or plugins that change their behaviour. `tests/conftest.py` may only gain new fixtures. If you think a test is wrong, stop and explain why in the report.
 5. **Touch only the files listed** under "Files" in the task.
-6. **No network access** in code or tests.
+6. **No network access** in code or tests, with one exception: `zotcore/citation.py` may call Zotero's local API on `127.0.0.1`, and tests may start servers on `127.0.0.1`.
 7. Before finishing, run `python -m pytest` (use `.venv/bin/python -m pytest` if the repo has a `.venv`) on the **current** pytest; never pin pytest to an old version to make tests pass. **All** tests, old and new, must pass.
 8. **Stop rule:** if the same failure survives two fix attempts, stop and write the report with status `BLOCKED`. Include the failing output and your best hypothesis.
 9. **Finish** by writing `tasks/NN-report.md` (template below) and making one commit: `task NN: <title>`.

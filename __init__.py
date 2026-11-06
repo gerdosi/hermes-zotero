@@ -4,6 +4,7 @@
 # under this guard.
 if __package__:
     from .zotcore import __version__, cli, tools
+    from .zotcore.citation import ZOTERO_LOCAL_API
     from .zotcore.settings import Settings
 
     def register(ctx):
@@ -14,7 +15,7 @@ if __package__:
             from plugins.plugin_storage import plugin_data_dir  # Hermes public API; per-profile folder
             return plugin_data_dir("hermes-zotero")
 
-        for spec in tools.tool_specs(settings, data_root=data_root):
+        for spec in tools.tool_specs(settings, data_root=data_root, citation_api=ZOTERO_LOCAL_API):
             ctx.register_tool(name=spec.name, toolset="zotero", schema=spec.schema,
                               handler=spec.handler, description=spec.description, emoji="📚")
 

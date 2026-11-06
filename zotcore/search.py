@@ -234,6 +234,17 @@ def find_item(con, key, library=None) -> tuple[str, str]:
     return libs[0], k
 
 
+def item_info(con, library: str, key: str) -> dict:
+    """Metadata of one indexed item (the keys zotero_read returns before the text fields)."""
+    title, creators, year, doi, publication, text_source, flags = con.execute(
+        "SELECT title, creators, year, doi, publication, text_source, flags FROM items "
+        "WHERE library = ? AND item_key = ?", (library, key)).fetchone()
+    creators = json.loads(creators or "[]")
+    return {"key": key, "library": library, "title": title, "creators": creators[:3], "n_authors": len(creators),
+            "year": year, "doi": doi or None, "publication": publication or None, "text_source": text_source,
+            "flags": json.loads(flags or "[]")}
+
+
 def read_item(con, *, key, library=None, query=None, offset=None, max_chars: int) -> dict:
     """Return a bounded piece of one item's text."""
     lib, k = find_item(con, key, library)
@@ -253,13 +264,7 @@ def read_item(con, *, key, library=None, query=None, offset=None, max_chars: int
     text, end, total, section = read_window(con, lib, k, pos, max_chars)
     if total > 0 and pos >= total:
         warnings.append(f"offset {pos} is past the end of the text ({total} characters)")
-    title, creators, year, doi, publication, text_source, flags = con.execute(
-        "SELECT title, creators, year, doi, publication, text_source, flags FROM items "
-        "WHERE library = ? AND item_key = ?", (lib, k)).fetchone()
-    creators = json.loads(creators or "[]")
-    return {"key": k, "library": lib, "title": title, "creators": creators[:3], "n_authors": len(creators),
-            "year": year, "doi": doi or None, "publication": publication or None, "text_source": text_source,
-            "flags": json.loads(flags or "[]"), "total_chars": total, "offset": pos,
+    return {**item_info(con, lib, k), "total_chars": total, "offset": pos,
             "next_offset": None if end >= total else end, "section": section or None,
             "text": text, "warnings": warnings}
 

@@ -7,12 +7,15 @@ from pathlib import Path
 from typing import Callable
 
 from . import __version__
+from .annotations import load_annotations, open_current_snapshot, page_entries
+from .citation import citation
 from .datadir import resolve_data_dir
 from .index import Index
 from .jsonout import err, ok, safe
-from .search import MAX_SEARCH_CHARS, SearchError, open_index, read_item, search
+from .search import MAX_SEARCH_CHARS, SearchError, find_item, item_info, open_index, read_item, search
 from .settings import Settings
 from .snapshot import is_stale, load_info
+from .synctool import sync_step
 
 STATUS_DESC = ("Zotero library index status: whether the local Zotero index is ready, "
                "how fresh it is, and what it holds.")
@@ -21,7 +24,12 @@ SEARCH_DESC = ("Zotero library search: find papers the user already has, by full
                "Returns ranked papers with short passages and a coverage verdict (strong / thin / none) "
                "for the topic; doi= checks whether one specific paper is held. Search here before the web.")
 READ_DESC = ("Zotero paper reader: read a bounded passage of one paper from the user's library, by item key, "
-             "at the best match for a query or at a character offset. Use keys from zotero_search.")
+             "at the best match for a query or at a character offset, with a citation line. "
+             "mode=annotations returns the user's own highlights, comments and notes on the paper instead. "
+             "Use keys from zotero_search.")
+SYNC_DESC = ("Zotero index update: add new and changed papers from the user's Zotero library to the local index. "
+             "Each call runs for at most budget_seconds and the next call resumes; it returns progress and "
+             "how many items remain. Use it when the user has added papers or zotero_status shows a stale snapshot.")
 SEARCH_SCHEMA = {"type": "object", "properties": {
     "query": {"type": "string", "description": "Keywords, e.g. 'SCD1 ferroptosis'. Every word counts."},
     "doi": {"type": "string", "description": "Check whether this DOI is in the library."},
@@ -35,8 +43,13 @@ READ_SCHEMA = {"type": "object", "properties": {
     "library": {"type": "string", "description": "Only needed when the key exists in two libraries."},
     "query": {"type": "string", "description": "Start at the passage that best matches these words."},
     "offset": {"type": "integer", "minimum": 0, "description": "Start at this character (next_offset of a previous read)."},
-    "max_chars": {"type": "integer", "description": "Characters to return (default and cap set by the user)."}},
+    "max_chars": {"type": "integer", "description": "Characters to return (default and cap set by the user)."},
+    "mode": {"type": "string", "enum": ["text", "annotations"],
+             "description": "'text' (default): the paper's text. 'annotations': the user's highlights, comments and notes."}},
     "required": ["key"]}
+SYNC_SCHEMA = {"type": "object", "properties": {
+    "budget_seconds": {"type": "integer", "minimum": 5, "maximum": 60,
+                       "description": "Time limit for this call in seconds (default set by the user)."}}}
 
 
 def _int_arg(args: dict, name: str, default=None):
@@ -72,8 +85,12 @@ class ToolSpec:
 
 
 def tool_specs(settings_provider: Callable[[], Settings],
-               data_root: Callable[[], object] | None = None) -> list[ToolSpec]:
-    """Build tool specs; settings_provider and data_root are called inside handlers only."""
+               data_root: Callable[[], object] | None = None,
+               citation_api: str | None = None) -> list[ToolSpec]:
+    """Build tool specs; settings_provider and data_root are called inside handlers only.
+
+    citation_api is the base URL of Zotero's local API; None means Zotero is never contacted.
+    """
 
     @safe
     def status(args: dict, **kwargs) -> str:
@@ -142,14 +159,65 @@ def tool_specs(settings_provider: Callable[[], Settings],
         s = settings_provider()
 
         def run(con) -> str:
-            max_chars = _int_arg(args, "max_chars", s.read_max_chars_default)
+            mode = (_str_arg(args, "mode") or "text").lower()
+            if mode not in ("text", "annotations"):
+                return err("invalid_argument", "mode must be 'text' or 'annotations'")
+            max_chars = min(max(_int_arg(args, "max_chars", s.read_max_chars_default), 200), s.read_max_chars_cap)
             offset = _int_arg(args, "offset")
-            payload = read_item(con, key=_str_arg(args, "key"), library=_str_arg(args, "library"),
-                                query=_str_arg(args, "query"), offset=None if offset is None else max(offset, 0),
-                                max_chars=min(max(max_chars, 200), s.read_max_chars_cap))
+            offset = None if offset is None else max(offset, 0)
+            query = _str_arg(args, "query")
+            if mode == "text":
+                payload = read_item(con, key=_str_arg(args, "key"), library=_str_arg(args, "library"),
+                                    query=query, offset=offset, max_chars=max_chars)
+            else:
+                lib, k = find_item(con, _str_arg(args, "key"), _str_arg(args, "library"))
+                payload = item_info(con, lib, k)
+            lib, k = payload["library"], payload["key"]
+            root = Path(data_root())
+            loaded = None
+            snap = open_current_snapshot(root)
+            if snap is not None:
+                try:
+                    loaded = load_annotations(snap, lib, k)
+                finally:
+                    snap.close()
+            payload["mode"] = mode
+            if mode == "text":
+                payload["annotations_count"] = None if loaded is None else len(loaded[0])
+            else:
+                entries, empty = loaded if loaded is not None else ([], 0)
+                start = offset or 0
+                page, next_offset = page_entries(entries, start, max_chars)
+                info = load_info(root / "snapshot")
+                warnings: list[str] = []
+                if query:
+                    warnings.append("query is not used in annotations mode")
+                if snap is None:
+                    warnings.append("no Zotero snapshot yet; run `hermes zotero sync` in a terminal")
+                elif loaded is None:
+                    warnings.append("this item is not in the current Zotero snapshot")
+                if entries and start >= len(entries):
+                    warnings.append(f"offset {start} is past the last annotation ({len(entries)})")
+                payload.update(total_annotations=len(entries), offset=start, next_offset=next_offset,
+                               annotations=page, empty_omitted=empty,
+                               snapshot_taken_at=None if info is None else info.taken_at, warnings=warnings)
+            payload["citation"] = citation(citation_api, lib, k, creators=payload["creators"],
+                                           year=payload["year"], title=payload["title"],
+                                           publication=payload["publication"], doi=payload["doi"])
             return ok(**payload)
 
         return with_index(run)
+
+    @safe
+    def zsync(args: dict, **kwargs) -> str:
+        s = settings_provider()
+        if data_root is None:
+            return err("unavailable", "plugin data dir unavailable")
+        try:
+            budget = min(max(_int_arg(args, "budget_seconds", s.sync_tool_budget_seconds), 5), 60)
+            return ok(**sync_step(s, Path(data_root()), budget_seconds=budget))
+        except SearchError as e:
+            return err(e.code, e.message, e.hint)
 
     return [
         ToolSpec(
@@ -170,5 +238,11 @@ def tool_specs(settings_provider: Callable[[], Settings],
             schema={"name": "zotero_read", "description": READ_DESC, "parameters": READ_SCHEMA},
             handler=zread,
             description=READ_DESC,
+        ),
+        ToolSpec(
+            name="zotero_sync",
+            schema={"name": "zotero_sync", "description": SYNC_DESC, "parameters": SYNC_SCHEMA},
+            handler=zsync,
+            description=SYNC_DESC,
         ),
     ]

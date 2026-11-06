@@ -43,3 +43,4 @@ DeepSeek peak hours: Mon–Fri 01:00–04:00 and 06:00–10:00 UTC, i.e. **02:00
 | 06 | The search index and `hermes zotero sync` | **high** | yes (full sync, ~3.5 GB index; run after 06b) |
 | 06b | One unreadable file must not block the sync | low | no |
 | 07 | `zotero_search` (coverage, DOI check) and `zotero_read` | medium | yes (queries on the real index; `hermes gateway restart` first) |
+| 08 | Annotations, citation line, `zotero_sync` tool | medium | yes (annotations and citations with Zotero closed and open; `hermes gateway restart` first) |

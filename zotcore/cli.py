@@ -9,6 +9,7 @@ from .datadir import resolve_data_dir
 from .index import Index, sync
 from .settings import Settings
 from .snapshot import SnapshotError, is_stale, load_info, take_snapshot
+from .synctool import SyncBusy, sync_lock
 from .textsource import MarkdownCorpus
 
 
@@ -48,7 +49,17 @@ def _run_sync(settings: Settings, data_root) -> int:
         return 1
     root = Path(data_root())
     try:
-        info = take_snapshot(result.path, root / "snapshot")
+        with sync_lock(root):
+            return _sync_locked(settings, root, result.path)
+    except SyncBusy:
+        print("Another sync is running; try again in a minute.")
+        return 1
+
+
+def _sync_locked(settings: Settings, root: Path, data_dir) -> int:
+    """Snapshot and index while the sync lock is held."""
+    try:
+        info = take_snapshot(data_dir, root / "snapshot")
     except SnapshotError as e:
         print(f"snapshot failed ({e.code}): {e.message}")
         return 1
@@ -64,7 +75,7 @@ def _run_sync(settings: Settings, data_root) -> int:
 
     index = Index(root / "index.sqlite")
     try:
-        report = sync(index, info.path, result.path, libraries=settings.libraries, corpus=corpus,
+        report = sync(index, info.path, data_dir, libraries=settings.libraries, corpus=corpus,
                       batch_items=settings.sync_batch_items, progress=progress)
         for warning in report.warnings:
             print(f"  warning: {warning}")
@@ -110,7 +121,12 @@ def run(args: argparse.Namespace, settings: Settings, data_root=None) -> int:
             print("snapshot failed: plugin data dir unavailable")
             return 1
         try:
-            info = take_snapshot(result.path, Path(data_root()) / "snapshot")
+            root = Path(data_root())
+            with sync_lock(root):
+                info = take_snapshot(result.path, root / "snapshot")
+        except SyncBusy:
+            print("Another sync is running; try again in a minute.")
+            return 1
         except SnapshotError as e:
             print(f"snapshot failed ({e.code}): {e.message}")
             return 1

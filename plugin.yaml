@@ -10,6 +10,7 @@ provides_tools:
   - zotero_status
   - zotero_search
   - zotero_read
+  - zotero_sync
 config_schema:
   zotero_data_dir: {type: str, default: "", description: "Zotero data directory. Empty = find it from Zotero's prefs.js, then ~/Zotero."}
   markdown_path: {type: str, default: "", description: "Optional folder of your own converted Markdown papers; preferred over Zotero's text cache."}

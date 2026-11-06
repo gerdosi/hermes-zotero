@@ -40,6 +40,14 @@ class SyncReport:
     done: bool
     seconds: float
     warnings: tuple[str, ...]
+    read_errors: int = 0
+
+
+def _read_error_summary(read_errors: int) -> list[str]:
+    if read_errors <= 1:
+        return []
+    more = "; only the first 20 are listed" if read_errors > MAX_ITEM_WARNINGS else ""
+    return [f"{read_errors} items could not be read{more}"]
 
 
 class Index:
@@ -201,12 +209,10 @@ def sync(index: Index, snapshot_path, data_dir, *, libraries: Sequence[str] = ("
                 now = clock()
                 if now - t0 >= budget_seconds:
                     return SyncReport(examined, indexed, deleted, total - examined, False, now - t0,
-                                      tuple(warnings))
+                                      tuple(warnings + _read_error_summary(read_errors)), read_errors)
 
-        if read_errors > 1:
-            more = "; only the first 20 are listed" if read_errors > MAX_ITEM_WARNINGS else ""
-            warnings.append(f"{read_errors} items could not be read{more}")
         index.set_state("last_sync", datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))
-        return SyncReport(examined, indexed, deleted, 0, True, clock() - t0, tuple(warnings))
+        return SyncReport(examined, indexed, deleted, 0, True, clock() - t0,
+                          tuple(warnings + _read_error_summary(read_errors)), read_errors)
     finally:
         con.close()
