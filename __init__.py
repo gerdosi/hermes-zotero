@@ -10,7 +10,11 @@ if __package__:
         def settings() -> Settings:
             return Settings.from_getter(ctx.get_config)
 
-        for spec in tools.tool_specs(settings):
+        def data_root():
+            from plugins.plugin_storage import plugin_data_dir  # Hermes public API; per-profile folder
+            return plugin_data_dir("hermes-zotero")
+
+        for spec in tools.tool_specs(settings, data_root=data_root):
             ctx.register_tool(name=spec.name, toolset="zotero", schema=spec.schema,
                               handler=spec.handler, description=spec.description, emoji="📚")
 
@@ -18,6 +22,6 @@ if __package__:
             name="zotero",
             help="Local, read-only Zotero library index",
             setup_fn=cli.setup_parser,
-            handler_fn=lambda args: cli.run(args, settings()),
+            handler_fn=lambda args: cli.run(args, settings(), data_root=data_root),
             description="Check and maintain the local Zotero index used by the zotero_* tools.",
         )
