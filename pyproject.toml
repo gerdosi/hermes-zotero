@@ -1,0 +1,13 @@
+[project]
+name = "hermes-zotero"
+version = "0.1.0"
+description = "Read-only local Zotero index for Hermes Agent"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [{ name = "Gábor Erdősi" }]
+dependencies = []
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "--import-mode=importlib -q"

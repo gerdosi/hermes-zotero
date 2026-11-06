@@ -1,0 +1,21 @@
+name: hermes-zotero
+version: "0.1.0"
+manifest_version: 2
+description: "Read-only local index of your Zotero library: search and read papers you already own, even with Zotero closed. No network, no writes."
+author: "Gábor Erdősi"
+license: MIT
+homepage: "https://github.com/<owner>/hermes-zotero"
+requires_hermes: ">=0.23.0"
+provides_tools:
+  - zotero_status
+config_schema:
+  zotero_data_dir: {type: str, default: "", description: "Zotero data directory. Empty = find it from Zotero's prefs.js, then ~/Zotero."}
+  markdown_path: {type: str, default: "", description: "Optional folder of your own converted Markdown papers; preferred over Zotero's text cache."}
+  libraries: {type: list, default: [user], description: "Libraries to index: 'user' and/or numeric group IDs."}
+  coverage_strong_min: {type: int, default: 8, description: "Matching papers needed for a 'strong' coverage verdict."}
+  coverage_recent_min: {type: int, default: 2, description: "Recent matching papers needed for 'strong'."}
+  coverage_recent_years: {type: int, default: 5, description: "How many years count as recent."}
+  sync_batch_items: {type: int, default: 200, description: "Items indexed per transaction during sync."}
+  sync_tool_budget_seconds: {type: int, default: 30, description: "Time limit for one zotero_sync tool call (5-60)."}
+  read_max_chars_default: {type: int, default: 4000, description: "Default characters returned by zotero_read."}
+  read_max_chars_cap: {type: int, default: 12000, description: "Hard cap on characters returned by zotero_read."}
