@@ -14,7 +14,7 @@ Model / reasoning: claude-sonnet-5-5 / low
 ## Checksums
 c2fc38ac192dcb590bbd8aedf0c622c4a9469bd6445d7728110236e79d9798e2  tests/test_02_datadir.py
 ## Deviations from the task
-- none. The live check (`hermes zotero doctor` vs Zotero settings) was not run.
+- none. The live check was run and passed (see "## Live check").
 ## Open questions
 - none
 
