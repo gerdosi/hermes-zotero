@@ -46,6 +46,15 @@ def _stat(path: Path) -> tuple[int, int] | None:
     return (st.st_size, st.st_mtime_ns)
 
 
+def _wal_header(path: Path) -> bytes | None:
+    """First 32 bytes of a WAL file (magic, page size, checkpoint sequence, salts), or None if absent."""
+    try:
+        with open(path, "rb") as f:
+            return f.read(32)
+    except OSError:
+        return None
+
+
 def _finalize_copy(db_copy: Path) -> str:
     """Verify the copy, fold the WAL into it and make it a single file. Returns the quick_check."""
     try:
@@ -99,6 +108,7 @@ def take_snapshot(data_dir, dest_root, *, retries: int = 3, settle_seconds: floa
             tmp.mkdir()
             before_db = _stat(db)
             before_wal = _stat(wal)
+            before_hdr = _wal_header(wal)
             try:
                 copy(str(db), str(tmp / "zotero.sqlite"))
                 if before_wal is not None:
@@ -107,8 +117,16 @@ def take_snapshot(data_dir, dest_root, *, retries: int = 3, settle_seconds: floa
                 raise SnapshotError("copy_failed", f"copying failed: {e}") from e
             after_db = _stat(db)
             after_wal = _stat(wal)
+            after_hdr = _wal_header(wal)
+            copied_hdr = _wal_header(tmp / "zotero.sqlite-wal")
+            # A WAL restart (after a full checkpoint) rewrites the header with new salts and
+            # overwrites frames from frame 1. Size/mtime cannot see that, so the 32-byte header
+            # must be identical before, after and in the copy; otherwise the copy may mix
+            # old and new frames and retry.
             consistent = after_db == before_db and before_db is not None and (
-                before_wal is None or (after_wal is not None and after_wal[0] >= before_wal[0]))
+                before_wal is None or (
+                    after_wal is not None and after_wal[0] >= before_wal[0]
+                    and before_hdr == after_hdr == copied_hdr))
             if not consistent:
                 shutil.rmtree(tmp, ignore_errors=True)
                 if attempt < retries:
