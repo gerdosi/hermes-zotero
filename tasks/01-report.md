@@ -25,3 +25,58 @@ All five match the table in the task.
 - Resolved in task 01b: root __init__.py now guarded with "if __package__:"; 23 passed on pytest 9.2.0.
 ## Open questions
 - none
+
+## Live check
+Run on the Mac; the in-chat "Call zotero_status" step was not run.
+
+```
+$ ln -s ~/Developer/hermes-zotero ~/.hermes/plugins/hermes-zotero
+(exit 0, no output)
+
+$ hermes plugins enable hermes-zotero
+✓ Plugin hermes-zotero enabled.
+Gateway reloaded plugins — deferred: tools (next session).
+
+$ hermes plugins validate ~/Developer/hermes-zotero --install-deps
+✓ manifest — plugin.yaml parses
+✓ manifest fields — name, version, description present
+✓ requires_hermes — spec '>=0.23.0' parses
+✓ config schema — shape valid
+✓ requires_env — all entries UPPER_SNAKE
+✓ oauth — not declared
+✓ loadable — entry: __init__.py
+✓ python dependencies — none declared
+✓ capability probe — register() ran in isolation
+✓ declared tools — matches registrations
+✓ declared hooks — matches registrations
+✓ declared middleware — matches registrations
+✓ built-in tool collisions — no collisions
+✓ security scan — safe
+✓ no core override — no runtime rebinds of Hermes core
+◆ Isolation — runs in the plugin host (plugins.isolation: host)
+  · ctx.register_cli_command() is skipped in the host (`hermes <command>`
+subcommands are wired into the local CLI parser)
+
+Validation passed.
+
+$ hermes plugins doctor ~/Developer/hermes-zotero
+Plugin Doctor: /Users/erdoke/Developer/hermes-zotero
+  manifest: hermes-zotero 0.1.0 (standalone)
+  OK: runtime discovery, manifest parsing, import, and registration passed
+  registrations: 1 tool(s), 0 hook(s)
+
+$ hermes zotero doctor
+hermes-zotero 0.1.0
+  zotero_data_dir: 
+  markdown_path: 
+  libraries: ['user']
+  coverage_strong_min: 8
+  coverage_recent_min: 2
+  coverage_recent_years: 5
+  sync_batch_items: 200
+  sync_tool_budget_seconds: 30
+  read_max_chars_default: 4000
+  read_max_chars_cap: 12000
+```
+
+Notes: all four exited 0 with no failures or warnings. `plugins doctor` reports 1 tool and does not list the CLI command "zotero" (expected by the task), but `hermes zotero doctor` runs, so the CLI command is registered.
