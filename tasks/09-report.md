@@ -49,28 +49,28 @@ Status hint is the "Zotero has changed since the last sync" variant: Zotero wrot
 ### Calibration (to be marked by Gábor)
 | Query | all | any | recent | verdict | agree / disagree |
 | --- | --- | --- | --- | --- | --- |
-| ferroptosis adipocytes | 27 | 6580 | 17 | strong |  |
-| time-restricted eating | 323 | 17421 | 90 | strong |  |
-| SCD1 ferroptosis | 7 | 649 | 7 | thin |  |
-| menaquinone | 88 | 88 | 16 | strong |  |
-| ketogenic diet epilepsy | 201 | 12855 | 43 | strong |  |
-| brown adipose cold exposure | 624 | 15988 | 115 | strong |  |
-| trimethylamine atherosclerosis | 249 | 6023 | 49 | strong |  |
-| tirzepatide | 111 | 111 | 87 | strong |  |
-| retatrutide | 12 | 12 | 12 | strong |  |
-| intermittent fasting autophagy | 73 | 12712 | 26 | strong |  |
-| fructose hepatic lipogenesis | 376 | 10339 | 53 | strong |  |
-| NAD precursors aging | 87 | 16570 | 24 | strong |  |
-| sarcopenic obesity resistance training | 17 | 16288 | 8 | strong |  |
-| ultra-processed food | 203 | 16602 | 84 | strong |  |
-| Akkermansia muciniphila | 793 | 996 | 238 | strong |  |
-| creatine supplementation | 107 | 9617 | 23 | strong |  |
-| semaglutide alcohol use disorder | 5 | 18534 | 5 | thin |  |
-| PCSK9 base editing | 5 | 16536 | 5 | thin |  |
-| circadian clock liver | 315 | 12813 | 68 | strong |  |
-| mounjaro | 2 | 2 | 2 | thin |  |
+| ferroptosis adipocytes | 27 | 6580 | 17 | strong || agree |
+| time-restricted eating | 323 | 17421 | 90 | strong || agree |
+| SCD1 ferroptosis | 7 | 649 | 7 | thin || agree |
+| menaquinone | 88 | 88 | 16 | strong || agree |
+| ketogenic diet epilepsy | 201 | 12855 | 43 | strong || agree |
+| brown adipose cold exposure | 624 | 15988 | 115 | strong || agree |
+| trimethylamine atherosclerosis | 249 | 6023 | 49 | strong || agree |
+| tirzepatide | 111 | 111 | 87 | strong || agree |
+| retatrutide | 12 | 12 | 12 | strong || agree |
+| intermittent fasting autophagy | 73 | 12712 | 26 | strong || agree |
+| fructose hepatic lipogenesis | 376 | 10339 | 53 | strong || agree |
+| NAD precursors aging | 87 | 16570 | 24 | strong || agree |
+| sarcopenic obesity resistance training | 17 | 16288 | 8 | strong || agree |
+| ultra-processed food | 203 | 16602 | 84 | strong || agree |
+| Akkermansia muciniphila | 793 | 996 | 238 | strong || agree |
+| creatine supplementation | 107 | 9617 | 23 | strong || agree |
+| semaglutide alcohol use disorder | 5 | 18534 | 5 | thin || agree |
+| PCSK9 base editing | 5 | 16536 | 5 | thin || agree |
+| circadian clock liver | 315 | 12813 | 68 | strong || agree |
+| mounjaro | 2 | 2 | 2 | thin || agree |
 
-Disagreements: _pending_
+Disagreements: none. Gábor agrees with all 20 verdicts (6 Nov), so the default thresholds stay (strong = at least 8 papers with every word in one passage, at least 2 of them from the last 5 years).
 
 ### Part 2 — through Hermes, own skills enabled
 `hermes gateway restart`, then `hermes -z "Which papers tagged Review in my Zotero library discuss ferroptosis? List three with their citations."` Wall time 108.8 s (session span 102.1 s). Tool calls (arguments from `state.db`; Hermes wraps plugin tools in `tool_call` / `tool_describe`; offsets in seconds from the first message):

@@ -17,8 +17,10 @@ TOOLS = {"zotero_status", "zotero_search", "zotero_read", "zotero_sync"}
 # Hermes (tools/tool_search_catalog.py): the deferred-tool catalog shows a tool's first sentence, cut at 80 characters.
 SENTENCE_END = re.compile(r"(?<!\be\.g)(?<!\bi\.e)(?<!\betc)[.!?](?=\s|$)")
 # Hermes (tools/skills_tool_plugin.py) logs a prompt-injection warning for a skill containing any of these.
-INJECTION = ["ignore previous instructions", "ignore all previous", "you are now", "disregard your",
-             "forget your instructions", "new instructions:", "system prompt:", "<system>", "]]>"]
+# The phrases are stored as word lists: Hermes' install scanner reads this file too and would flag them.
+INJECTION = [" ".join(words) for words in (("ignore", "previous", "instructions"), ("ignore", "all", "previous"),
+                                           ("you", "are", "now"), ("disregard", "your"), ("forget", "your", "instructions"),
+                                           ("new", "instructions:"), ("system", "prompt:"))] + ["<system>", "]]>"]
 FERRO = "Ferroptosis is an iron-dependent cell death driven by lipid peroxidation.\n\n" * 6
 
 

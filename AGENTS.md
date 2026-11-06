@@ -4,7 +4,7 @@ Hermes loads this file automatically. It applies to every task in `tasks/`.
 
 ## What this project is
 
-`hermes-zotero` is a Hermes Agent plugin that builds a **read-only, local index** of the user's Zotero library and exposes a few search/read tools. No network, no writes to Zotero, no third-party Python packages.
+`hermes-zotero` is a Hermes Agent plugin that builds a **read-only, local index** of the user's Zotero library and exposes a few search/read tools. No writes to Zotero, no third-party Python packages, and no network except the loopback citation call (rule 6).
 
 ## Layout
 
@@ -52,3 +52,5 @@ Model / reasoning: <model id> / <low|medium|high|max>
 ## Style
 
 Type hints on public functions; short docstrings; no `print` outside `zotcore/cli.py`; UTF-8 everywhere (`encoding="utf-8"` on every text read or write).
+
+Hermes' install scanner reads every file in the repo, documentation included. Committed text must not contain shell commands that write into Hermes' own configuration files, or prompt-injection phrases, not even as examples.
