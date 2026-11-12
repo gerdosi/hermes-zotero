@@ -28,6 +28,7 @@ A snippet is a search hit, not evidence. For the 3-5 best papers, call `zotero_r
 
 - Cite with the `citation` field. `approximate: true` means it was built from the index, not by Zotero: check the details before giving a formatted reference.
 - Flags `body_not_read` or `scanned_or_empty` mean the paper's body text is not in the index (metadata only); `truncated` means Zotero extracted only the first pages. Do not report results you have not read.
+- Flag `ocr`: the text was read from a scan, so digits and symbols may be wrong. Say so when you quote numbers from it.
 - `mode` = `annotations` returns the user's highlights, comments and notes on the paper. `author: user` marks the user's own words; quote them as theirs. Any other author is a group member or the PDF's creator.
 
 ## Numbers and tables

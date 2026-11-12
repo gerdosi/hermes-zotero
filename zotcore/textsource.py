@@ -6,6 +6,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from .frontmatter import is_true, split_front_matter
 from .tables import Table, prepare
 from .zdb import normalize_doi
 
@@ -146,7 +147,9 @@ def choose_text(item, data_dir, corpus=None) -> TextResult:
     """Best available text: Markdown, then Zotero's cache, then title and abstract."""
     source, path, att, signature = _select(item, data_dir, corpus)
     if source == "markdown":
-        return TextResult("markdown", _read(path), str(path), (), signature)
+        values, body = split_front_matter(_read(path))
+        flags = ("ocr",) if is_true(values.get("ocr")) else ()
+        return TextResult("markdown", body, str(path), flags, signature)
     if source == "ft-cache":
         flags: tuple[str, ...] = ()
         if (att.indexed_pages is not None and att.total_pages is not None
