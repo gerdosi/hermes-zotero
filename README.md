@@ -124,7 +124,7 @@ What the plugin reads, writes and connects to:
 
 ## Disk space and speed
 
-The index needs about 180 KB per paper with full text, plus a copy of `zotero.sqlite`. Measured on an Apple-silicon MacBook Air with 19,290 papers: a first sync of about 70 seconds (version 0.1.0; since 0.2.0 each paper's text is also checked for damage, which adds some time), a 3.5 GB index plus a 163 MB snapshot, a re-check of an unchanged library in under 2 seconds, and searches in under half a second.
+The index needs about 180 KB per paper with full text, plus a copy of `zotero.sqlite`. Measured on an Apple-silicon MacBook Air with 19,290 papers: a first sync of about 2.5 minutes (version 0.2.0, which also converts tables and checks each paper's text for damage; 0.1.0 took about 70 seconds), a 3.5 GB index plus a 163 MB snapshot, a re-check of an unchanged library in under 2 seconds, and searches in under half a second.
 
 ## Limitations
 
