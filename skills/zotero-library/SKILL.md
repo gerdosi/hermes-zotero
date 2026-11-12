@@ -1,7 +1,7 @@
 ---
 name: zotero-library
 description: "Research questions: check the user's Zotero library first"
-version: 0.1.0
+version: 0.2.0
 metadata:
   hermes:
     tags: [zotero, literature, research, citations, local-first]
@@ -30,9 +30,18 @@ A snippet is a search hit, not evidence. For the 3-5 best papers, call `zotero_r
 - Flags `body_not_read` or `scanned_or_empty` mean the paper's body text is not in the index (metadata only); `truncated` means Zotero extracted only the first pages. Do not report results you have not read.
 - `mode` = `annotations` returns the user's highlights, comments and notes on the paper. `author: user` marks the user's own words; quote them as theirs. Any other author is a group member or the PDF's creator.
 
+## Numbers and tables
+
+For numbers (baseline values, effect sizes, doses), use the papers' tables, which are kept as pipe rows:
+
+- `zotero_search` with `in_tables` = true searches table cells only. Its coverage then counts tables only: never judge a gap from it.
+- A passage with `kind: table` names its `table`. `zotero_read` with `mode` = `tables` and that `table` returns the whole table; without `table` it lists the paper's tables.
+- Cells are the PDF's own strings, and a long table comes in pieces that repeat the header. Check the header and the units before quoting a number.
+
 ## Keep the index fresh
 
 - Error `no_index`: ask the user to run `hermes zotero sync` once in a terminal. A large library takes a few minutes.
+- Error `index_outdated` (after a plugin update): call `zotero_sync` until it returns `done: true`.
 - `zotero_status` says whether the index is `ready` and gives a `hint` when Zotero has changed since the last sync.
 - When the user has added papers, or the hint says so, call `zotero_sync`. While it returns `done: false`, call it again.
 

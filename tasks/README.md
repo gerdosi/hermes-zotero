@@ -46,3 +46,7 @@ DeepSeek peak hours: Mon–Fri 01:00–04:00 and 06:00–10:00 UTC, i.e. **02:00
 | 08 | Annotations, citation line, `zotero_sync` tool | medium | yes (annotations and citations with Zotero closed and open; `hermes gateway restart` first) |
 | 09 | Bundled skill, `tag` filter, Tool Search descriptions | medium | yes (tag searches, verdict calibration; Hermes runs with your two Zotero skills briefly switched off) |
 | 10 | README, disclosures, scanner-safe repo | medium | yes (validate a clean clone, push, fresh install in a throwaway profile, nightly sync job) |
+| 11 | Table-aware passages, `in_tables` search, `mode=tables` (0.2.0) | medium | yes (one full re-sync, table searches on the real index; `hermes gateway restart`) |
+| 12 | Front matter of corpus files, flag `ocr` | low | no (checked in the local tasks, once files carry front matter) |
+| 13 | Damaged-text flag `text_damaged` | low | yes (one full re-sync; the flagged count on the real index) |
+| 14 | Corpus guide, README, version 0.2.0 | low | yes (validate a clean clone, push, fresh install; then the catalog pin) |

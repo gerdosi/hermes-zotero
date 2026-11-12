@@ -7,6 +7,7 @@ import sqlite3
 from datetime import date
 from pathlib import Path
 
+from .index import SCHEMA_VERSION
 from .zdb import normalize_doi
 
 STOPWORDS = frozenset(
@@ -17,10 +18,15 @@ POOL = 200                 # top passages examined before grouping them by item
 SNIPPET_TOKENS = 24
 MAX_SEARCH_CHARS = 12000   # cap on the whole JSON answer of zotero_search
 MAX_COLLECTIONS = 3        # collection paths shown per hit
+MAX_TABLES_LISTED = 100    # tables listed by zotero_read mode=tables
+MAX_CAPTION_CHARS = 160
 BM25 = "bm25(passages, 2.0, 1.0, 1.0)"   # title counts double; columns are title, section, body
 
 _JOIN = "FROM passages p JOIN passage_map m ON m.rowid = p.rowid"
 _SCOPE_JOIN = " JOIN temp.scope s ON s.library = m.library AND s.item_key = m.item_key"
+_TABLES_ONLY = " AND m.kind = 'table'"
+OUTDATED_HINT = ("Call zotero_sync and repeat it until it reports done: true (a one-time rebuild), "
+                 "or ask the user to run `hermes zotero sync` in a terminal.")
 
 
 class SearchError(Exception):
@@ -39,7 +45,16 @@ def open_index(path) -> sqlite3.Connection:
     if not p.exists():
         raise SearchError("no_index", "The Zotero index has not been built yet.",
                           "Run `hermes zotero sync` in a terminal, then try again.")
-    return sqlite3.connect(p.resolve().as_uri() + "?mode=ro", uri=True)
+    con = sqlite3.connect(p.resolve().as_uri() + "?mode=ro", uri=True)
+    try:
+        version = _state(con, "schema")
+    except sqlite3.Error:
+        version = None
+    if version != str(SCHEMA_VERSION):
+        con.close()
+        raise SearchError("index_outdated", "The Zotero index was built by an older version of the plugin.",
+                          OUTDATED_HINT)
+    return con
 
 
 def query_terms(query) -> tuple[list[str], bool]:
@@ -123,19 +138,20 @@ def _hit(lib: str, key: str, row, match: str, passages: list[dict]) -> dict:
     return hit
 
 
-def _find_hits(con, terms, scoped, limit) -> list[dict]:
+def _find_hits(con, terms, scoped, limit, in_tables=False) -> list[dict]:
     per_item = 2 if limit <= 10 else 1
     slots: dict = {}   # (lib, key) -> [pass, passages]
     sql = (f"SELECT m.library, m.item_key, p.start, CASE WHEN p.section = p.title THEN '' ELSE p.section END, "
-           f"snippet(passages, 2, '«', '»', '…', {SNIPPET_TOKENS}) {_JOIN}{_SCOPE_JOIN if scoped else ''} "
-           f"WHERE passages MATCH ? ORDER BY {BM25} LIMIT ?")
+           f"snippet(passages, 2, '«', '»', '…', {SNIPPET_TOKENS}), m.kind, m.table_no "
+           f"{_JOIN}{_SCOPE_JOIN if scoped else ''} "
+           f"WHERE passages MATCH ?{_TABLES_ONLY if in_tables else ''} ORDER BY {BM25} LIMIT ?")
     passes = [("all", _all_expr(terms))]
     if len(terms) > 1:
         passes.append(("any", _any_expr(terms)))
     for name, expr in passes:
         if len(slots) >= limit:
             break
-        for lib, key, start, section, snippet in con.execute(sql, (expr, max(POOL, limit * 20))):
+        for lib, key, start, section, snippet, kind, table_no in con.execute(sql, (expr, max(POOL, limit * 20))):
             slot = slots.get((lib, key))
             if slot is None:
                 if len(slots) >= limit:
@@ -146,19 +162,23 @@ def _find_hits(con, terms, scoped, limit) -> list[dict]:
             passage = {"offset": start, "snippet": snippet}
             if section:
                 passage["section"] = section
+            if kind == "table":
+                passage["kind"] = "table"
+                passage["table"] = table_no
             slot[1].append(passage)
     rows = _item_rows(con, slots)
     return [_hit(lib, key, rows[(lib, key)], name, passages)
             for (lib, key), (name, passages) in slots.items() if (lib, key) in rows]
 
 
-def _coverage(con, terms, scoped, settings, this_year) -> dict:
+def _coverage(con, terms, scoped, settings, this_year, in_tables=False) -> dict:
     join = _JOIN + (_SCOPE_JOIN if scoped else "")
+    only = _TABLES_ONLY if in_tables else ""
     any_n = con.execute(f"SELECT COUNT(*) FROM (SELECT DISTINCT m.library, m.item_key {join} "
-                        "WHERE passages MATCH ?)", (_any_expr(terms),)).fetchone()[0]
+                        f"WHERE passages MATCH ?{only})", (_any_expr(terms),)).fetchone()[0]
     all_n, recent, newest = con.execute(
         f"SELECT COUNT(*), SUM(i.year >= ?), MAX(i.year) FROM (SELECT DISTINCT m.library, m.item_key {join} "
-        "WHERE passages MATCH ?) d JOIN items i ON i.library = d.library AND i.item_key = d.item_key",
+        f"WHERE passages MATCH ?{only}) d JOIN items i ON i.library = d.library AND i.item_key = d.item_key",
         (this_year - settings.coverage_recent_years + 1, _all_expr(terms))).fetchone()
     recent = recent or 0
     if all_n == 0:
@@ -169,7 +189,11 @@ def _coverage(con, terms, scoped, settings, this_year) -> dict:
         verdict = "thin"
     cov = {"matches_all": all_n, "matches_any": any_n, "recent": recent,
            "recent_years": settings.coverage_recent_years, "newest_year": newest, "verdict": verdict}
-    if all_n == 0 and any_n > 0 and len(terms) > 1:
+    if in_tables:
+        cov["in_tables"] = True
+        cov["hint"] = ("Counts cover table cells only. Judge what the library holds on a topic from a search "
+                       "without in_tables.")
+    elif all_n == 0 and any_n > 0 and len(terms) > 1:
         cov["hint"] = "No passage contains every term; retry with fewer or broader terms before using the web."
     return cov
 
@@ -248,6 +272,77 @@ def item_info(con, library: str, key: str) -> dict:
             "flags": json.loads(flags or "[]")}
 
 
+def _table_rows(con, library: str, key: str) -> list[tuple]:
+    return con.execute('SELECT number, caption, n_rows, n_cols, start, "end" FROM item_tables '
+                       "WHERE library = ? AND item_key = ? ORDER BY start", (library, key)).fetchall()
+
+
+def _table_entry(row) -> dict:
+    number, caption, n_rows, n_cols, start, end = row
+    caption = caption or ""
+    if len(caption) > MAX_CAPTION_CHARS:
+        caption = caption[:MAX_CAPTION_CHARS - 1].rstrip() + "…"
+    return {"table": number, "caption": caption or None, "rows": n_rows, "cols": n_cols, "chars": end - start}
+
+
+def list_tables(con, *, key, library=None) -> dict:
+    """The structured tables of one item: number, caption, size."""
+    lib, k = find_item(con, key, library)
+    rows = _table_rows(con, lib, k)
+    warnings: list[str] = []
+    if not rows:
+        warnings.append("this paper has no structured tables in the index; "
+                        "read the text instead (mode=text with a query)")
+    if len(rows) > MAX_TABLES_LISTED:
+        warnings.append(f"only the first {MAX_TABLES_LISTED} tables are listed")
+    return {**item_info(con, lib, k), "total_tables": len(rows),
+            "tables": [_table_entry(r) for r in rows[:MAX_TABLES_LISTED]], "warnings": warnings}
+
+
+def read_table(con, *, key, table: int, library=None, offset=None, max_chars: int) -> dict:
+    """One structured table as pipe rows: whole pieces while they fit max_chars."""
+    lib, k = find_item(con, key, library)
+    rows = [r for r in _table_rows(con, lib, k) if r[0] == table]
+    if not rows:
+        raise SearchError("not_found", f"this paper has no table {table} in the index",
+                          "Call zotero_read with mode=tables and no table to list the tables.")
+    warnings: list[str] = []
+    if len(rows) > 1:
+        warnings.append(f"{len(rows)} tables are numbered {table}; this is the first")
+    start, end = rows[0][4], rows[0][5]
+    pos = start
+    if offset is not None:
+        if start <= offset < end:
+            pos = offset
+        else:
+            warnings.append(f"offset {offset} is outside table {table} ({start}-{end}); showing its start")
+    pieces = con.execute(
+        'SELECT p.start, p."end", p.body FROM passage_map m JOIN passages p ON p.rowid = m.rowid '
+        "WHERE m.library = ? AND m.item_key = ? AND m.kind = 'table' AND p.start >= ? AND p.\"end\" <= ? "
+        "ORDER BY p.start", (lib, k, start, end)).fetchall()
+    parts: list[str] = []
+    used = 0
+    cursor = pos
+    for p_start, p_end, body in pieces:
+        if p_end <= pos:
+            continue
+        piece = body[max(pos - p_start, 0):]
+        if used + len(piece) > max_chars:
+            if not parts:   # one piece is larger than the limit: cut it at a row end
+                cut = piece.rfind("\n", 0, max_chars) + 1 or max_chars
+                parts.append(piece[:cut])
+                cursor = max(pos, p_start) + cut
+                warnings.append("max_chars is smaller than one piece of this table, so the piece was cut; "
+                                "the next page starts without the header rows")
+            break
+        parts.append(piece)
+        used += len(piece) + 1
+        cursor = p_end
+    return {**item_info(con, lib, k), "table": _table_entry(rows[0]), "total_chars": end - start, "offset": pos,
+            "next_offset": None if cursor >= end else (cursor if cursor > pos else None),
+            "text": "\n".join(parts), "warnings": warnings}
+
+
 def read_item(con, *, key, library=None, query=None, offset=None, max_chars: int) -> dict:
     """Return a bounded piece of one item's text."""
     lib, k = find_item(con, key, library)
@@ -269,7 +364,7 @@ def read_item(con, *, key, library=None, query=None, offset=None, max_chars: int
         warnings.append(f"offset {pos} is past the end of the text ({total} characters)")
     return {**item_info(con, lib, k), "total_chars": total, "offset": pos,
             "next_offset": None if end >= total else end, "section": section or None,
-            "text": text, "warnings": warnings}
+            "text": text, "tables_count": len(_table_rows(con, lib, k)), "warnings": warnings}
 
 
 def _doi_check(con, doi, terms) -> dict:
@@ -288,7 +383,7 @@ def _doi_check(con, doi, terms) -> dict:
 
 
 def search(con, settings, *, query=None, doi=None, library=None, collection=None, year_from=None,
-           year_to=None, limit=10, this_year=None, tag=None) -> dict:
+           year_to=None, limit=10, this_year=None, tag=None, in_tables=False) -> dict:
     """Search the index; see the task spec for the result layout."""
     terms, truncated = query_terms(query)
     if not terms and not doi:
@@ -303,8 +398,8 @@ def search(con, settings, *, query=None, doi=None, library=None, collection=None
     if scoped and _build_scope(con, library, collection, year_from, year_to, tag):
         warnings.append("no indexed items match the filters")
     if terms:
-        result["hits"] = _find_hits(con, terms, scoped, limit)
-        result["coverage"] = _coverage(con, terms, scoped, settings, this_year or date.today().year)
+        result["hits"] = _find_hits(con, terms, scoped, limit, in_tables)
+        result["coverage"] = _coverage(con, terms, scoped, settings, this_year or date.today().year, in_tables)
     else:
         result["hits"] = []
         result["coverage"] = None

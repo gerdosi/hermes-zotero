@@ -10,10 +10,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Iterable, Sequence
 
-from .textsource import TextResult, choose_text, split_passages, text_signature
+from .textsource import TextResult, build_passages, choose_text, text_signature
 from .zdb import list_items, libraries as zotero_libraries, load_items, open_snapshot
 
 CHUNK = 500
+SCHEMA_VERSION = 2   # 2: passages know their kind, structured tables are listed (0.2.0)
 MAX_ITEM_WARNINGS = 20
 
 SCHEMA = (
@@ -21,11 +22,15 @@ SCHEMA = (
   creators TEXT, year INTEGER, date TEXT, doi TEXT, publication TEXT, abstract TEXT, collections TEXT, tags TEXT, date_added TEXT,
   modified TEXT, text_source TEXT, text_path TEXT, flags TEXT, signature TEXT, n_passages INTEGER, PRIMARY KEY (library, item_key))""",
     "CREATE INDEX IF NOT EXISTS items_doi ON items(doi)",
-    "CREATE TABLE IF NOT EXISTS passage_map (rowid INTEGER PRIMARY KEY, library TEXT NOT NULL, item_key TEXT NOT NULL)",
+    """CREATE TABLE IF NOT EXISTS passage_map (rowid INTEGER PRIMARY KEY, library TEXT NOT NULL, item_key TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'text', table_no INTEGER)""",
     "CREATE INDEX IF NOT EXISTS passage_map_item ON passage_map(library, item_key)",
     """CREATE VIRTUAL TABLE IF NOT EXISTS passages USING fts5(title, section, body, library UNINDEXED, item_key UNINDEXED,
   start UNINDEXED, end UNINDEXED, tokenize='porter unicode61 remove_diacritics 2')""",
     "CREATE TABLE IF NOT EXISTS state (key TEXT PRIMARY KEY, value TEXT)",
+    """CREATE TABLE IF NOT EXISTS item_tables (library TEXT NOT NULL, item_key TEXT NOT NULL, number INTEGER NOT NULL,
+  caption TEXT, n_rows INTEGER, n_cols INTEGER, start INTEGER NOT NULL, "end" INTEGER NOT NULL,
+  PRIMARY KEY (library, item_key, start))""",
 )
 
 
@@ -59,8 +64,26 @@ class Index:
         self.con: sqlite3.Connection = sqlite3.connect(str(path), isolation_level=None)
         self.con.execute("PRAGMA journal_mode=WAL")
         self.con.execute("PRAGMA synchronous=NORMAL")
+        fresh = self.con.execute("SELECT 1 FROM sqlite_master WHERE name = 'items'").fetchone() is None
         for statement in SCHEMA:
             self.con.execute(statement)
+        if fresh:
+            self.set_state("schema", str(SCHEMA_VERSION))
+
+    def schema_version(self) -> int:
+        """Layout version of this index file; 1 for an index built by 0.1.0."""
+        value = self.get_state("schema")
+        return int(value) if value and value.isdigit() else 1
+
+    def reset(self) -> None:
+        """Empty an index built with another layout; the next sync fills it again from scratch."""
+        with self.transaction():
+            for table in ("passages", "passage_map", "item_tables", "items"):
+                self.con.execute(f"DROP TABLE IF EXISTS {table}")
+            for statement in SCHEMA:
+                self.con.execute(statement)
+            self.con.execute("DELETE FROM state")
+            self.set_state("schema", str(SCHEMA_VERSION))
 
     def close(self) -> None:
         """Close the database connection."""
@@ -94,9 +117,10 @@ class Index:
             chunk = rowids[start:start + CHUNK]
             self.con.execute(f"DELETE FROM passages WHERE rowid IN ({','.join('?' * len(chunk))})", chunk)
         self.con.execute("DELETE FROM passage_map WHERE library = ? AND item_key = ?", (library, key))
+        self.con.execute("DELETE FROM item_tables WHERE library = ? AND item_key = ?", (library, key))
 
-    def upsert(self, item, text, passages: Sequence) -> None:
-        """Replace the item row and all of its passages."""
+    def upsert(self, item, text, passages: Sequence, tables: Sequence = ()) -> None:
+        """Replace the item row, all of its passages and its table list."""
         self._drop_passages(item.library, item.key)
         self.con.execute(
             "INSERT OR REPLACE INTO items (library, item_key, item_id, item_type, title, creators, year, date, doi, "
@@ -107,12 +131,15 @@ class Index:
              json.dumps(list(item.tags)), item.date_added, item.modified, text.source, text.path,
              json.dumps(list(text.flags)), text.signature, len(passages)))
         for p in passages:
-            rowid = self.con.execute("INSERT INTO passage_map (library, item_key) VALUES (?, ?)",
-                                     (item.library, item.key)).lastrowid
+            rowid = self.con.execute("INSERT INTO passage_map (library, item_key, kind, table_no) VALUES (?, ?, ?, ?)",
+                                     (item.library, item.key, p.kind, p.table)).lastrowid
             self.con.execute(
                 'INSERT INTO passages (rowid, title, section, body, library, item_key, start, "end") '
                 "VALUES (?,?,?,?,?,?,?,?)",
                 (rowid, item.title, p.section, p.text, item.library, item.key, p.start, p.end))
+        for t in tables:
+            self.con.execute("INSERT OR REPLACE INTO item_tables VALUES (?,?,?,?,?,?,?,?)",
+                             (item.library, item.key, t.number, t.caption, t.rows, t.cols, t.start, t.end))
 
     def delete(self, library: str, keys: Iterable[str]) -> int:
         """Remove items and their passages; returns the number of item rows removed."""
@@ -139,9 +166,12 @@ class Index:
         for (raw,) in con.execute("SELECT flags FROM items WHERE flags IS NOT NULL AND flags != '[]'"):
             for flag in json.loads(raw):
                 flags[flag] = flags.get(flag, 0) + 1
+        current = self.schema_version() == SCHEMA_VERSION
         return {
+            "schema": self.schema_version(),
             "items": con.execute("SELECT COUNT(*) FROM items").fetchone()[0],
             "passages": con.execute("SELECT COUNT(*) FROM passage_map").fetchone()[0],
+            "tables": con.execute("SELECT COUNT(*) FROM item_tables").fetchone()[0] if current else 0,
             "libraries": dict(con.execute("SELECT library, COUNT(*) FROM items GROUP BY library ORDER BY library")),
             "by_source": dict(con.execute("SELECT text_source, COUNT(*) FROM items GROUP BY text_source")),
             "flags": flags,
@@ -155,6 +185,9 @@ def sync(index: Index, snapshot_path, data_dir, *, libraries: Sequence[str] = ("
     """Bring the index in line with a snapshot. Safe to interrupt; the next run resumes."""
     t0 = clock()
     warnings: list[str] = []
+    if index.schema_version() != SCHEMA_VERSION:
+        index.reset()
+        warnings.append("the index was built by another plugin version and is being rebuilt from scratch")
     con = open_snapshot(snapshot_path)
     try:
         known = zotero_libraries(con)
@@ -200,7 +233,8 @@ def sync(index: Index, snapshot_path, data_dir, *, libraries: Sequence[str] = ("
                                             "indexed title and abstract only")
                         text = TextResult("metadata", "\n\n".join(p for p in (item.title, item.abstract) if p),
                                           None, ("body_not_read", "read_error"), signature)
-                    index.upsert(item, text, split_passages(text.text, text.source))
+                    _, passages, tables = build_passages(text.text, text.source)
+                    index.upsert(item, text, passages, tables)
                     indexed += 1
             examined += len(batch)
             if progress is not None:

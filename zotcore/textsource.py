@@ -6,6 +6,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from .tables import Table, prepare
 from .zdb import normalize_doi
 
 MIN_BYTES = 200
@@ -30,6 +31,8 @@ class Passage:
     start: int
     end: int
     text: str
+    kind: str = "text"            # "text" | "table"
+    table: int | None = None      # the N of '### Table N' for a table passage
 
 
 def doi_slug(doi: str) -> str:
@@ -207,3 +210,23 @@ def split_passages(text: str, source: str, *, window: int = 2000, overlap: int =
             if piece.strip():
                 passages.append(Passage(name, a, b, piece))
     return passages
+
+
+def build_passages(text: str, source: str, *, window: int = 2000,
+                   overlap: int = 200) -> tuple[str, list[Passage], tuple[Table, ...]]:
+    """The text as it is indexed, its passages and its structured tables.
+
+    Positions (Passage.start/end, Table.start/end) refer to the returned text, in which each
+    structured table stands as pipe rows; for a paper without such tables it is `text` itself.
+    """
+    prep = prepare(text, source, window)
+    passages = split_passages(prep.text[:prep.body_end], source, window=window, overlap=overlap)
+    for seg in prep.segments:
+        name = f"Table {seg.number}"
+        if seg.kind == "table":
+            passages.append(Passage(name, seg.start, seg.end, prep.text[seg.start:seg.end], "table", seg.number))
+        else:
+            for a, b in _window(prep.text, seg.start, seg.end, window, overlap):
+                if prep.text[a:b].strip():
+                    passages.append(Passage(name, a, b, prep.text[a:b]))
+    return prep.text, passages, prep.tables

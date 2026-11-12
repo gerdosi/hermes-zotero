@@ -10,9 +10,10 @@ from . import __version__
 from .annotations import load_annotations, open_current_snapshot, page_entries
 from .citation import citation
 from .datadir import resolve_data_dir
-from .index import Index
+from .index import SCHEMA_VERSION, Index
 from .jsonout import err, ok, safe
-from .search import MAX_SEARCH_CHARS, SearchError, find_item, item_info, open_index, read_item, search
+from .search import (MAX_SEARCH_CHARS, OUTDATED_HINT, SearchError, find_item, item_info, list_tables, open_index,
+                     read_item, read_table, search)
 from .settings import Settings
 from .snapshot import is_stale, load_info
 from .synctool import sync_step
@@ -22,11 +23,12 @@ STATUS_DESC = ("Zotero index status: whether the local library index is ready an
 SEARCH_DESC = ("Zotero library search: find papers the user already owns, before using the web. "
                "Full text, offline, ranked by passage. Returns short snippets and a coverage verdict "
                "(strong / thin / none) for the topic. Filters: collection, tag, year, library; "
-               "doi= checks whether one paper is held.")
-READ_DESC = ("Zotero paper reader: read part of one paper, or the user's highlights on it. "
+               "in_tables=true searches table cells only; doi= checks whether one paper is held.")
+READ_DESC = ("Zotero paper reader: read part of a paper, its tables or the user's highlights. "
              "Give a key from zotero_search and a query (starts at the best match) or an offset "
              "(next_offset pages on); every result carries a citation line. "
-             "mode=annotations returns the user's own highlights, comments and notes instead of the text.")
+             "mode=tables lists the paper's tables, and with table=N returns one; "
+             "mode=annotations returns the user's highlights, comments and notes.")
 SYNC_DESC = ("Zotero index update: add new and changed papers from Zotero to the local index. "
              "Each call stops after budget_seconds and the next call resumes; it reports progress and "
              "how many items remain. Use it when the user has added papers or zotero_status says Zotero changed.")
@@ -38,6 +40,7 @@ SEARCH_SCHEMA = {"type": "object", "properties": {
     "library": {"type": "string", "description": "'user' or a group ID. Default: all indexed libraries."},
     "year_from": {"type": "integer"},
     "year_to": {"type": "integer"},
+    "in_tables": {"type": "boolean", "description": "true: search only inside the papers' tables (numbers, baseline values)."},
     "limit": {"type": "integer", "minimum": 1, "maximum": 25, "description": "Papers to return (default 10)."}}}
 READ_SCHEMA = {"type": "object", "properties": {
     "key": {"type": "string", "description": "Item key from zotero_search, e.g. 'ABCD2345'."},
@@ -45,8 +48,10 @@ READ_SCHEMA = {"type": "object", "properties": {
     "query": {"type": "string", "description": "Start at the passage that best matches these words."},
     "offset": {"type": "integer", "minimum": 0, "description": "Start at this character (next_offset of a previous read)."},
     "max_chars": {"type": "integer", "description": "Characters to return (default and cap set by the user)."},
-    "mode": {"type": "string", "enum": ["text", "annotations"],
-             "description": "'text' (default): the paper's text. 'annotations': the user's highlights, comments and notes."}},
+    "mode": {"type": "string", "enum": ["text", "annotations", "tables"],
+             "description": "'text' (default): the paper's text. 'annotations': the user's highlights, comments and notes. "
+                            "'tables': the paper's tables (a list, or one table with table=N)."},
+    "table": {"type": "integer", "minimum": 1, "description": "With mode=tables: the number of the table to return."}},
     "required": ["key"]}
 SYNC_SCHEMA = {"type": "object", "properties": {
     "budget_seconds": {"type": "integer", "minimum": 5, "maximum": 60,
@@ -75,12 +80,30 @@ def _str_arg(args: dict, name: str):
     return str(v).strip() or None
 
 
-def _status_hint(ready: bool, data_dir, snapshot) -> str | None:
+def _bool_arg(args: dict, name: str) -> bool:
+    """Boolean argument; accepts booleans, 0/1 and the words true/false/yes/no."""
+    v = args.get(name)
+    if v is None or v == "":
+        return False
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, int) and v in (0, 1):
+        return bool(v)
+    if isinstance(v, str) and v.strip().lower() in ("true", "false", "yes", "no", "1", "0"):
+        return v.strip().lower() in ("true", "yes", "1")
+    raise SearchError("invalid_argument", f"{name} must be true or false")
+
+
+def _status_hint(ready: bool, data_dir, snapshot, index=None) -> str | None:
     """What the agent should do next, as one sentence, or None."""
+    if index is not None and index["schema"] != SCHEMA_VERSION:
+        return "The index was built by an older version of the plugin. " + OUTDATED_HINT
     if not ready and data_dir is None:
         return "Zotero's data directory was not found: ask the user to run `hermes zotero doctor` in a terminal."
     if not ready:
         return "The index is empty: ask the user to run `hermes zotero sync` in a terminal once."
+    if index is not None and index["last_sync"] is None:
+        return "The index is still being built, so results are incomplete: call zotero_sync until it reports done: true."
     if snapshot is not None and snapshot["stale"]:
         return "Zotero has changed since the last sync: call zotero_sync to add the changes."
     return None
@@ -129,8 +152,8 @@ def tool_specs(settings_provider: Callable[[], Settings],
                 if info is not None:
                     snapshot = {"taken_at": info.taken_at,
                                 "stale": is_stale(info, found.path) if found.path else None}
-        ready = bool(index and index["items"] > 0)
-        return ok(plugin_version=__version__, ready=ready, hint=_status_hint(ready, found.path, snapshot),
+        ready = bool(index and index["items"] > 0 and index["schema"] == SCHEMA_VERSION)
+        return ok(plugin_version=__version__, ready=ready, hint=_status_hint(ready, found.path, snapshot, index),
                   settings=s.as_dict(), warnings=warnings,
                   data_dir=found.as_dict(), snapshot=snapshot, index=index)
 
@@ -155,7 +178,7 @@ def tool_specs(settings_provider: Callable[[], Settings],
             limit = min(max(_int_arg(args, "limit", 10), 1), 25)
             payload = search(con, s, query=_str_arg(args, "query"), doi=_str_arg(args, "doi"),
                              library=_str_arg(args, "library"), collection=_str_arg(args, "collection"),
-                             tag=_str_arg(args, "tag"),
+                             tag=_str_arg(args, "tag"), in_tables=_bool_arg(args, "in_tables"),
                              year_from=_int_arg(args, "year_from"), year_to=_int_arg(args, "year_to"), limit=limit)
             out = ok(**payload)
             dropped = 0
@@ -174,22 +197,34 @@ def tool_specs(settings_provider: Callable[[], Settings],
 
         def run(con) -> str:
             mode = (_str_arg(args, "mode") or "text").lower()
-            if mode not in ("text", "annotations"):
-                return err("invalid_argument", "mode must be 'text' or 'annotations'")
+            if mode not in ("text", "annotations", "tables"):
+                return err("invalid_argument", "mode must be 'text', 'annotations' or 'tables'")
             max_chars = min(max(_int_arg(args, "max_chars", s.read_max_chars_default), 200), s.read_max_chars_cap)
             offset = _int_arg(args, "offset")
             offset = None if offset is None else max(offset, 0)
             query = _str_arg(args, "query")
+            table = _int_arg(args, "table")
             if mode == "text":
                 payload = read_item(con, key=_str_arg(args, "key"), library=_str_arg(args, "library"),
                                     query=query, offset=offset, max_chars=max_chars)
+                if table is not None:
+                    payload["warnings"].append("table is only used with mode=tables")
+            elif mode == "tables":
+                if table is None:
+                    payload = list_tables(con, key=_str_arg(args, "key"), library=_str_arg(args, "library"))
+                else:
+                    payload = read_table(con, key=_str_arg(args, "key"), table=table,
+                                         library=_str_arg(args, "library"), offset=offset, max_chars=max_chars)
+                if query:
+                    payload["warnings"].append("query is not used in tables mode; "
+                                               "use zotero_search with in_tables=true to find a table")
             else:
                 lib, k = find_item(con, _str_arg(args, "key"), _str_arg(args, "library"))
                 payload = item_info(con, lib, k)
             lib, k = payload["library"], payload["key"]
             root = Path(data_root())
             loaded = None
-            snap = open_current_snapshot(root)
+            snap = None if mode == "tables" else open_current_snapshot(root)
             if snap is not None:
                 try:
                     loaded = load_annotations(snap, lib, k)
@@ -198,7 +233,7 @@ def tool_specs(settings_provider: Callable[[], Settings],
             payload["mode"] = mode
             if mode == "text":
                 payload["annotations_count"] = None if loaded is None else len(loaded[0])
-            else:
+            elif mode == "annotations":
                 entries, empty = loaded if loaded is not None else ([], 0)
                 start = offset or 0
                 page, next_offset = page_entries(entries, start, max_chars)

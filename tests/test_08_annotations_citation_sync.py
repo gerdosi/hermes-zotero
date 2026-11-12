@@ -173,7 +173,7 @@ def test_sync_tool_is_registered_and_read_has_mode(plugin_module, fake_ctx):
     plugin_module.register(fake_ctx)
     assert {"zotero_status", "zotero_search", "zotero_read", "zotero_sync"} == set(fake_ctx.tools)
     mode = fake_ctx.tools["zotero_read"]["schema"]["parameters"]["properties"]["mode"]
-    assert mode["enum"] == ["text", "annotations"]
+    assert mode["enum"] == ["text", "annotations", "tables"]
     props = fake_ctx.tools["zotero_sync"]["schema"]["parameters"]["properties"]
     assert set(props) == {"budget_seconds"}
     assert "Zotero" in fake_ctx.tools["zotero_sync"]["schema"]["description"][:60]

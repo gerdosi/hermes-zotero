@@ -82,7 +82,7 @@ def _sync_locked(settings: Settings, root: Path, data_dir) -> int:
         print(f"Sync: indexed {report.indexed}, deleted {report.deleted}, "
               f"examined {report.examined} in {report.seconds:.1f}s")
         c = index.counts()
-        print(f"Index: {c['items']} items, {c['passages']} passages; "
+        print(f"Index: {c['items']} items, {c['passages']} passages, {c['tables']} tables; "
               f"text sources {c['by_source']}; flags {c['flags']}")
     finally:
         index.close()
