@@ -7,7 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .frontmatter import is_true, split_front_matter
-from .tables import Table, prepare
+from .tables import MARKER, Table, prepare
+from .textquality import damage
 from .zdb import normalize_doi
 
 MIN_BYTES = 200
@@ -143,19 +144,26 @@ def _read(path: Path) -> str:
         return fh.read()
 
 
+def _damage_flag(text: str) -> tuple[str, ...]:
+    """('text_damaged',) when the prose (structured tables left aside) shows conversion damage."""
+    marker = MARKER.search(text)
+    return ("text_damaged",) if damage(text[:marker.start()] if marker else text) else ()
+
+
 def choose_text(item, data_dir, corpus=None) -> TextResult:
     """Best available text: Markdown, then Zotero's cache, then title and abstract."""
     source, path, att, signature = _select(item, data_dir, corpus)
     if source == "markdown":
         values, body = split_front_matter(_read(path))
         flags = ("ocr",) if is_true(values.get("ocr")) else ()
-        return TextResult("markdown", body, str(path), flags, signature)
+        return TextResult("markdown", body, str(path), flags + _damage_flag(body), signature)
     if source == "ft-cache":
         flags: tuple[str, ...] = ()
         if (att.indexed_pages is not None and att.total_pages is not None
                 and att.indexed_pages < att.total_pages):
             flags = ("truncated",)
-        return TextResult("ft-cache", _read(path), str(path), flags, signature)
+        text = _read(path)
+        return TextResult("ft-cache", text, str(path), flags + _damage_flag(text), signature)
     text = "\n\n".join(p for p in (item.title, item.abstract) if p)
     flags = ("body_not_read",)
     if any(a.content_type == "application/pdf" for a in _stored(item)):
