@@ -56,3 +56,9 @@ next_offset: 108471 | warnings: [] | citation: Lambadiari et al. (2024). The Eff
 Verdict: all expectations met (schema 3, 19,298 items, 1,060,810 passages, 10,369 tables; in_tables returns only table passages; `td tr` no longer matches markup; every search under 0.7 s; table read is pipe rows with a citation). Note: in the first hit (C79A2UFR, table 3) the converter put the journal's page header and a footnote into the header cells; the plugin reproduces them as given. That is corpus quality, not a plugin bug.
 
 Part 2 (through Hermes): see below.
+
+### Part 2: through Hermes (Gábor, 12 Nov)
+
+`hermes -z "In my Zotero library, find a paper with a table of baseline LDL cholesterol values and quote two rows of that table with the citation."`
+
+Answer: Ridker et al. 2024, NEJM 391:2087 (doi 10.1056/NEJMoa2405182, key U65N5AUU), Table 1, LDL block: "Range of baseline levels - mg/dl: <96.1 | 96.1 to <113.5 | 113.5 to <129.7 | 129.7 to <150.7 | ≥150.7" and "No. of participants: 5616 | 5576 | 5583 | 5580 | 5584", with a full citation. The review session confirmed both rows are verbatim in the indexed table 1 (`mode=tables`, `table=1`). Tool-call log not captured. The answer's remark "from the PDF text layer, not a scan" rests on a missing `ocr` flag, which no paper carries until local task L1.
