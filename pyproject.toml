@@ -1,6 +1,6 @@
 [project]
 name = "hermes-zotero"
-version = "0.1.0"
+version = "0.2.0"
 description = "Read-only local Zotero index for Hermes Agent"
 requires-python = ">=3.11"
 license = "MIT"

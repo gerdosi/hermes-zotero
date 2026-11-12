@@ -15,6 +15,7 @@ The agent searches your library first, sees whether it covers the topic well (`s
 - **Four tools:** `zotero_search`, `zotero_read`, `zotero_status` and `zotero_sync` (details below).
 - **A skill**, `hermes-zotero:zotero-library`, that tells the agent to use your library before the web and how to read the results.
 - **A command**, `hermes zotero`, with `doctor`, `snapshot` and `sync`.
+- **Tables and provenance flags**, if you supply your own Markdown conversions: tables are searched and read as tables, and papers read by OCR are flagged. See [the corpus guide](docs/CORPUS.md).
 
 ## Requirements
 
@@ -33,14 +34,16 @@ hermes zotero sync        # builds the index; safe to stop and run again, it res
 
 If you use the Hermes gateway (the desktop app or a messaging channel), run `hermes gateway restart` afterwards so it loads the plugin.
 
+**Updating from 0.1.0:** the index has a new layout, so it is rebuilt once. After the update run `hermes zotero sync` (it takes about as long as the first sync), or let the agent call `zotero_sync` until it reports `done: true`. Until then the tools answer with the error `index_outdated`.
+
 `doctor` looks for Zotero's data directory in Zotero's own `prefs.js`, then in `~/Zotero`. If it is somewhere else, set `zotero_data_dir` (see Settings).
 
 ## Tools
 
 | Tool | What it does |
 | --- | --- |
-| `zotero_search` | Full-text search over your library, ranked by passage (BM25). Returns short snippets and a `coverage` verdict: `strong`, `thin` or `none`. Filters: `collection`, `tag`, `year_from`, `year_to`, `library`. `doi` checks whether you hold a given paper. |
-| `zotero_read` | Reads a bounded part of one paper: at the best match for a query, or at an offset to page on. `mode` = `annotations` returns your own highlights, comments and notes instead. Every result carries a citation line. |
+| `zotero_search` | Full-text search over your library, ranked by passage (BM25). Returns short snippets and a `coverage` verdict: `strong`, `thin` or `none`. Filters: `collection`, `tag`, `year_from`, `year_to`, `library`. `in_tables` = true searches only inside tables. `doi` checks whether you hold a given paper. |
+| `zotero_read` | Reads a bounded part of one paper: at the best match for a query, or at an offset to page on. `mode` = `annotations` returns your own highlights, comments and notes instead. `mode` = `tables` lists the paper's tables, and with `table` = N returns one as rows. Every result carries a citation line. |
 | `zotero_status` | Whether the index is ready, what it holds, when the snapshot was taken, and what to do next. |
 | `zotero_sync` | Adds new and changed papers to the index. Each call stops after `budget_seconds` (default 30) and the next call resumes. |
 
@@ -97,11 +100,11 @@ hermes config set plugins.entries.hermes-zotero.settings.libraries '["user", "12
 
 For each paper the index takes the best text it can find, in this order:
 
-1. **Your own Markdown**, if `markdown_path` is set: one file per paper, named `K:<Zotero item key>.md` or `doi_<DOI>.md` (the DOI in lower case, with every character other than letters, digits, dots and hyphens replaced by `_`), directly in that folder or in its `library` subfolder. Files under 200 bytes are skipped. Headings become sections in the results.
+1. **Your own Markdown**, if `markdown_path` is set: one file per paper, named `K:<Zotero item key>.md` or `doi_<DOI>.md` (the DOI in lower case, with every character other than letters, digits, dots and hyphens replaced by `_`), directly in that folder or in its `library` subfolder. Files under 200 bytes are skipped. Headings become sections in the results. A file can also carry a small header (`ocr: true`) and a section of structured tables; [the corpus guide](docs/CORPUS.md) has the format and advice on producing such files. The plugin itself contains no converter.
 2. **Zotero's full-text cache** (`.zotero-ft-cache` next to each stored PDF), the text Zotero extracted itself.
 3. **The title and abstract** only.
 
-Results say which source was used and flag papers whose body text is missing: `body_not_read` (no text found), `scanned_or_empty` (a stored PDF with little or no extracted text: a scan without OCR, or a PDF Zotero has not indexed yet) and `truncated` (Zotero indexed only the first pages; raise Zotero's indexing limits to fix it).
+Results say which source was used and flag papers whose body text is missing: `body_not_read` (no text found), `scanned_or_empty` (a stored PDF with little or no extracted text: a scan without OCR, or a PDF Zotero has not indexed yet) and `truncated` (Zotero indexed only the first pages; raise Zotero's indexing limits to fix it). Two more flags describe the text itself: `ocr` (your Markdown file says the text came from OCR, so digits and symbols may be wrong) and `text_damaged` (the text shows clear conversion damage, such as words run together or missing letters; search can miss such a paper).
 
 ## Citations
 
@@ -121,13 +124,15 @@ What the plugin reads, writes and connects to:
 
 ## Disk space and speed
 
-The index needs about 180 KB per paper with full text, plus a copy of `zotero.sqlite`. Measured on an Apple-silicon MacBook Air with 19,290 papers: a first sync of about 70 seconds, a 3.5 GB index plus a 163 MB snapshot, a re-check of an unchanged library in under 2 seconds, and searches in under half a second.
+The index needs about 180 KB per paper with full text, plus a copy of `zotero.sqlite`. Measured on an Apple-silicon MacBook Air with 19,290 papers: a first sync of about 70 seconds (version 0.1.0; since 0.2.0 each paper's text is also checked for damage, which adds some time), a 3.5 GB index plus a 163 MB snapshot, a re-check of an unchanged library in under 2 seconds, and searches in under half a second.
 
 ## Limitations
 
 - Search is lexical (BM25 with stemming), not semantic: it finds the words you search for, not their synonyms. The skill tells the agent to use scientific names rather than brand names.
 - Papers whose PDFs have no text layer are searchable by title and abstract only, unless you supply Markdown for them.
 - Annotations are read from the snapshot when asked for; they are not searchable.
+- Tables are recognised only in the structured-tables section of your own Markdown files. Tables in Zotero's extracted text, and pipe tables in the body of a Markdown file, are plain text.
+- The `text_damaged` flag is one-sided: a paper without it can still have flaws in its text.
 - The plugin never changes your Zotero library: no tagging, filing or editing.
 
 ## Development

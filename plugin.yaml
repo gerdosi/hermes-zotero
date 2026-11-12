@@ -1,5 +1,5 @@
 name: hermes-zotero
-version: "0.1.0"
+version: "0.2.0"
 manifest_version: 2
 description: "Search and read the papers in your Zotero library before the web: a local, read-only full-text index that works with Zotero closed. No writes to Zotero, no telemetry; its only network call goes to Zotero on this computer, for citations."
 author: "Gábor Erdősi"
