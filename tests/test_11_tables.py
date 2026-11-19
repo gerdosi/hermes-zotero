@@ -455,6 +455,6 @@ def test_schemas_and_descriptions(plugin_module, fake_ctx):
 
 def test_skill_explains_the_table_route():
     text = (ROOT / "skills" / "zotero-library" / "SKILL.md").read_text(encoding="utf-8")
-    assert re.search(r"^version: 0\.2\.0$", text, re.M) and len(text) <= 4000
+    assert re.search(r"^version: \d+\.\d+\.\d+$", text, re.M) and len(text) <= 4000   # the exact version: test_14
     for word in ("`in_tables`", "`table`", "`tables`", "`kind: table`", "`index_outdated`"):
         assert word in text

@@ -143,11 +143,11 @@ def test_an_index_from_task_11_is_rebuilt_once(tmp_path):
     index = Index(tmp_path / "pd" / "index.sqlite")
     try:
         assert sync(index, z.db_path, z.data_dir, corpus=MarkdownCorpus(md)).indexed == 6
-        assert SCHEMA_VERSION == 3 and index.schema_version() == 3
+        assert index.schema_version() == SCHEMA_VERSION
         index.set_state("schema", "2")
         index.con.execute("UPDATE items SET flags = '[]'")
         rep = sync(index, z.db_path, z.data_dir, corpus=MarkdownCorpus(md))
-        assert rep.indexed == 6 and any("rebuilt" in w for w in rep.warnings) and index.schema_version() == 3
+        assert rep.indexed == 6 and any("rebuilt" in w for w in rep.warnings) and index.schema_version() == SCHEMA_VERSION
         assert index.counts()["flags"]["text_damaged"] == 3
         rep = sync(index, z.db_path, z.data_dir, corpus=MarkdownCorpus(md))
         assert rep.indexed == 0 and rep.warnings == ()

@@ -14,7 +14,7 @@ from .textsource import TextResult, build_passages, choose_text, text_signature
 from .zdb import list_items, libraries as zotero_libraries, load_items, open_snapshot
 
 CHUNK = 500
-SCHEMA_VERSION = 3   # 2: passage kinds and the table list; 3: every paper checked for damaged text (0.2.0)
+SCHEMA_VERSION = 4   # 2: passage kinds and the table list; 3: damaged-text check (0.2.0); 4: mostly-symbols check (0.2.1)
 MAX_ITEM_WARNINGS = 20
 
 SCHEMA = (

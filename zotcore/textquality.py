@@ -11,6 +11,9 @@ RUN_ON_MIN = 5              # ... and at least this many of them
 FRAGMENT_SHARE = 0.35       # share of one-letter words
 NO_VOWEL_SHARE = 0.15       # share of words of 4+ letters without a vowel
 LIGATURE_MIN = 5            # words that lost fi / fl / ff (English)
+SYMBOLS_MIN = 1_000         # letters and symbols together; shorter texts are not judged for symbols
+LETTER_SHARE = 0.65         # below this share of letters among letters and symbols, the text is mostly symbols
+_NOT_SYMBOLS = ".|-"        # dot leaders, table rules and dashes; digits are not counted either
 
 _WORD = re.compile(r"[^\W\d_]+")
 _VOWELS = frozenset("aeiouyàáâãäåæèéêëìíîïòóôõöøùúûüýÿāăąēęěīıōőœūůűų")
@@ -22,16 +25,18 @@ _LIGATURE = re.compile(
 
 
 def damage(text: str) -> str | None:
-    """Kind of damage found in the text, or None: 'run_together', 'fragments', 'unreadable', 'ligatures'.
+    """Kind of damage found in the text, or None: 'symbols', 'run_together', 'fragments', 'unreadable', 'ligatures'.
 
     None means no sign was found, not that the text is intact. Texts that are short or mostly
     in a non-Latin script are not judged.
     """
     sample = text[:SAMPLE_CHARS]
     words = _WORD.findall(sample)
+    letters = sum(map(len, words))
+    if _mostly_symbols(sample, letters):
+        return "symbols"
     if len(words) < MIN_WORDS:
         return None
-    letters = sum(map(len, words))
     if sum(len(w) for w in words if ord(w[0]) < 0x250) < 0.9 * letters:
         return None
     lower = [w.lower() for w in words]
@@ -47,3 +52,13 @@ def damage(text: str) -> str | None:
     if len(_LIGATURE.findall(sample.lower())) >= LIGATURE_MIN:
         return "ligatures"
     return None
+
+
+def _mostly_symbols(sample: str, letters: int) -> bool:
+    """True when letters are under LETTER_SHARE of letters and symbols (white space, digits and .|- left out)."""
+    shown = len(sample) - sum(map(str.isspace, sample))
+    if letters >= LETTER_SHARE * shown:
+        return False            # the usual case, decided without counting symbols
+    symbols = (shown - letters - sum(map(str.isdecimal, sample))
+               - sum(sample.count(c) for c in _NOT_SYMBOLS))
+    return letters + symbols >= SYMBOLS_MIN and letters < LETTER_SHARE * (letters + symbols)

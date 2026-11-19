@@ -1,7 +1,7 @@
 ---
 name: zotero-library
 description: "Research questions: check the user's Zotero library first"
-version: 0.2.0
+version: 0.2.1
 metadata:
   hermes:
     tags: [zotero, literature, research, citations, local-first]

@@ -98,7 +98,7 @@ Credentials, anything that writes back to Zotero, and anything that is not deriv
 | Flag | Set when | What it tells the agent |
 | --- | --- | --- |
 | `ocr` | the front matter says `ocr: true` | Digits and symbols may be wrong; say so when quoting numbers. |
-| `text_damaged` | the text shows clear conversion damage: words run together, letters or ligatures missing, an unreadable font encoding | Rely on title and abstract; searches can miss the paper. |
+| `text_damaged` | the text shows clear conversion damage: words run together, letters or ligatures missing, an unreadable font encoding, mostly symbols instead of letters | Rely on title and abstract; searches can miss the paper. |
 | `truncated` | Zotero's text cache holds only the first pages | Results further on were not read. |
 | `body_not_read`, `scanned_or_empty` | no text was found for the item | Only title and abstract are in the index. |
 

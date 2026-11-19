@@ -19,11 +19,11 @@ def fenced(text):
     return re.findall(r"^```markdown\n(.*?)\n```$", text, re.S | re.M)
 
 
-def test_version_is_0_2_0_everywhere():
-    assert __version__ == "0.2.0"
-    assert re.search(r'^version: "0\.2\.0"$', read("plugin.yaml"), re.M)
-    assert tomllib.loads(read("pyproject.toml"))["project"]["version"] == "0.2.0"
-    assert re.search(r"^version: 0\.2\.0$", read("skills/zotero-library/SKILL.md"), re.M)
+def test_version_is_0_2_1_everywhere():
+    assert __version__ == "0.2.1"
+    assert re.search(r'^version: "0\.2\.1"$', read("plugin.yaml"), re.M)
+    assert tomllib.loads(read("pyproject.toml"))["project"]["version"] == "0.2.1"
+    assert re.search(r"^version: 0\.2\.1$", read("skills/zotero-library/SKILL.md"), re.M)
 
 
 def test_readme_covers_the_new_features_and_links_the_guide():

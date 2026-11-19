@@ -50,3 +50,4 @@ DeepSeek peak hours: Mon–Fri 01:00–04:00 and 06:00–10:00 UTC, i.e. **02:00
 | 12 | Front matter of corpus files, flag `ocr` | low | no (checked in the local tasks, once files carry front matter) |
 | 13 | Damaged-text flag `text_damaged` | low | yes (one full re-sync; the flagged count on the real index) |
 | 14 | Corpus guide, README, version 0.2.0 | low | yes (validate a clean clone, push, fresh install; then the catalog pin) |
+| 15 | Mostly-symbols check in `text_damaged`, version 0.2.1 | low | yes (one full re-sync, the flagged count; validate, push; then the catalog pin) |
